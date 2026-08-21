@@ -80,7 +80,11 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 SESSION_COOKIE_NAME = "suportal_sessionid"
 CSRF_COOKIE_NAME = "suportal_csrftoken"
+
+CSRF_TRUSTED_ORIGINS = ["https://portal.su-cloud.syu.ac.kr"]
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
