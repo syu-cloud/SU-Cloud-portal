@@ -1,0 +1,285 @@
+{% extends "portal/base.html" %}
+{% block title %}VM 관리 — SU Cloud Portal{% endblock %}
+
+{% block header_action %}
+<button class="primary" type="button" id="open-create">+ VM 생성</button>
+{% endblock %}
+
+{% block content %}
+
+{% if show_strip %}
+<div class="strip">
+  <div class="row" style="justify-content:space-between">
+    <span class="live-dot"><span class="dot"></span> 생성 중</span>
+    <span class="muted" style="font-size:12.5px">완료 {{ status_counts.ACTIVE }} · 진행 {{ status_counts.PROVISIONING }} ·
+      실패 {{ status_counts.FAILED }}</span>
+  </div>
+  <div class="segbar">
+        <div class="seg done" style="width:{% widthratio status_counts.ACTIVE strip_total 100 %}%"></div>
+        <div class="seg running" style="width:{% widthratio status_counts.PROVISIONING strip_total 100 %}%"></div>
+        <div class="seg failed" style="flex:1"></div>
+  </div>
+</div>
+{% endif %}
+
+{% if total_count == 0 %}
+<div class="card empty-card">
+  <div class="icon">🖥️</div>
+  <h2>아직 생성된 VM이 없어요</h2>
+  <p>
+    su-small · vCPU 2 / RAM 2GB / Disk 30GB · Ubuntu 24.04 LTS<br>
+    Security Group default (SSH만 허용)
+  </p>
+</div>
+{% else %}
+
+<div class="card">
+  <div class="row" style="justify-content:space-between;margin-bottom:14px">
+    <div class="row">
+            <a class="chip {% if not status_filter %}active{% endif %}" href="?q={{ q }}">전체 <span class="n">{{ total_count}}</span></a>
+      <a class="chip {% if status_filter == 'ACTIVE' %}active{% endif %}" href="?status=ACTIVE&q={{ q }}">ACTIVE <span
+          class="n">{{ status_counts.ACTIVE }}</span></a>
+      <a class="chip {% if status_filter == 'PROVISIONING' %}active{% endif %}"
+        href="?status=PROVISIONING&q={{ q }}">PROVISIONING <span class="n">{{ status_counts.PROVISIONING }}</span></a>
+      <a class="chip {% if status_filter == 'DELETING' %}active{% endif %}" href="?status=DELETING&q={{ q }}">DELETING
+        <span class="n">{{ status_counts.DELETING }}</span></a>
+      <a class="chip {% if status_filter == 'FAILED' %}active{% endif %}" href="?status=FAILED&q={{ q }}">FAILED <span
+          class="n">{{ status_counts.FAILED }}</span></a>
+    </div>
+    <div class="row" style="gap:14px">
+      <span class="muted" style="font-size:13px">여유 슬롯 {{ free }} / {{ total }}</span>
+      <button class="ghost danger" type="submit" form="vm-form" name="action" value="delete_all">전체 회수</button>
+    </div>
+  </div>
+  <form method="get" class="row">
+    <input type="hidden" name="status" value="{{ status_filter }}">
+    <input type="text" name="q" value="{{ q }}" placeholder="이름 / FIP / 계정 / 슬롯 번호 검색" style="flex:1">
+    <button class="ghost" type="submit">검색</button>
+  </form>
+</div>
+
+<div class="card">
+  <form method="post" id="vm-form">
+    {% csrf_token %}
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>슬롯</th>
+          <th>이름</th>
+          <th>FIP</th>
+          <th>계정</th>
+          <th>상태</th>
+          <th>생성일</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td>
+            <input type="checkbox" name="vm_ids" value="{{ row.vm.id }}" {% if row.vm.status == "PROVISIONING" %}disabled{% endif %}>
+          </td>
+          <td>{{ row.vm.slot_id|stringformat:"02d" }}</td>
+          <td>{{ row.name }}</td>
+          <td>{{ row.fip }}</td>
+          <td class="muted">{{ row.user }}</td>
+          <td style="position:relative">
+            {% if row.vm.status == "ACTIVE" %}<span class="badge ok">ACTIVE</span>
+            {% elif row.vm.status == "PROVISIONING" %}<span class="badge warn">PROVISIONING</span>
+            {% elif row.vm.status == "DELETING" %}<span class="badge muted">DELETING</span>
+            {% elif row.vm.status == "FAILED" %}
+            <span class="badge err fail-hover">
+              FAILED
+              <div class="popover">
+                <div class="popover-title">{{ row.fail_label }}</div>
+                <div class="popover-desc">{{ row.fail_desc }}</div>
+                <div class="popover-raw">{{ row.vm.error }}</div>
+              </div>
+            </span>
+            {% endif %}
+          </td>
+          <td class="muted">
+            {% if row.vm.status != "PROVISIONING" %}{{ row.vm.created_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="muted">조건에 맞는 VM이 없습니다.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </form>
+</div>
+
+<div class="sticky-bar" id="sticky-bar">
+  <div class="sticky-bar-inner">
+    <span class="muted" id="selected-count" style="font-size:13px">0개 선택됨</span>
+    <div class="row" style="gap:8px">
+      <button class="ghost" type="button" id="clear-selection">선택 취소</button>
+      <button class="primary" type="submit" form="vm-form" name="action" value="delete_selected">선택 회수</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<dialog id="create-dialog">
+  <div class="row" style="justify-content:space-between;margin-bottom:18px">
+    <strong style="font-size:16px">VM 생성</strong>
+    <button type="button" id="close-create" aria-label="닫기"
+      style="border:none;background:none;font-size:18px;cursor:pointer">×</button>
+  </div>
+
+  <div id="step-input">
+    <p class="muted" style="font-size:12px;font-weight:600;margin:0 0 8px">제공 사양 (고정)</p>
+    <table style="margin-bottom:18px">
+      <tr>
+        <td style="width:36px">🖥️</td>
+        <td>flavor</td>
+        <td style="text-align:right">su-small · 2vCPU · 2GB</td>
+      </tr>
+      <tr>
+        <td>💽</td>
+        <td>image</td>
+        <td style="text-align:right">ubuntu-24.04</td>
+      </tr>
+      <tr>
+        <td>🛡️</td>
+        <td>보안그룹</td>
+        <td style="text-align:right">default</td>
+      </tr>
+    </table>
+
+    <p class="muted" style="font-size:12px;font-weight:600;margin:0 0 8px">여유분</p>
+    <div class="row" style="justify-content:space-between;margin-bottom:6px;font-size:13px">
+      <span></span>
+      <span><strong>{{ taken }}</strong> 사용 · <strong>{{ free }}</strong> 여유 / 최대 {{ total }}</span>
+    </div>
+    <div style="height:8px;border-radius:4px;background:var(--muted-bg);overflow:hidden;margin-bottom:20px">
+      <div style="height:100%;width:{% widthratio taken total 100 %}%;background:var(--accent)"></div>
+    </div>
+
+    <p class="muted" style="font-size:13px;font-weight:600;margin:0 0 10px">생성 개수</p>
+    <div class="stepper">
+      <button type="button" id="dec">−</button>
+      <input type="number" id="count" min="1" max="{{ free }}" value="1">
+      <button type="button" id="inc">+</button>
+    </div>
+    <p class="error-text" id="count-error" style="display:none">여유 슬롯({{ free }}개)을 초과했습니다.</p>
+    <p class="muted" style="font-size:13px;margin:14px 0 0" id="preview-text">
+      생성 후 {{ taken|add:1 }}개 사용 · 여유 {{ free|add:"-1" }}
+    </p>
+
+    <div class="row" style="margin-top:20px;gap:10px">
+      <button type="button" id="cancel-create" class="ghost" style="flex:1">취소</button>
+      <button type="button" id="go-confirm" class="primary" style="flex:2" {% if free == 0 %}disabled{% endif %}>
+        VM 1개 생성
+      </button>
+    </div>
+  </div>
+
+  <div id="step-confirm" style="display:none">
+    <p style="font-size:15px;margin:0 0 20px">
+      <strong id="confirm-count">1</strong>대를 생성합니다. 계속할까요?
+    </p>
+    <form method="post" action="{% url 'portal:create' %}">
+      {% csrf_token %}
+      <input type="hidden" name="count" id="hidden-count" value="1">
+      <div class="row" style="gap:10px">
+        <button type="button" id="back-to-input" class="ghost" style="flex:1">이전</button>
+        <button type="submit" class="primary" style="flex:2">생성 시작</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<script>
+  const dlg = document.getElementById('create-dialog');
+  document.getElementById('open-create').addEventListener('click', () => { resetModal(); dlg.showModal(); });
+  document.getElementById('close-create').addEventListener('click', () => dlg.close());
+  document.getElementById('cancel-create').addEventListener('click', () => dlg.close());
+
+  const stepInput = document.getElementById('step-input');
+  const stepConfirm = document.getElementById('step-confirm');
+  function resetModal() {
+    stepInput.style.display = '';
+    stepConfirm.style.display = 'none';
+  }
+
+  const FREE = {{ free }};
+  const TAKEN = {{ taken }};
+  const countInput = document.getElementById('count');
+  const goConfirmBtn = document.getElementById('go-confirm');
+  const errEl = document.getElementById('count-error');
+  const previewEl = document.getElementById('preview-text');
+
+  function syncCount() {
+    let v = parseInt(countInput.value, 10) || 0;
+    goConfirmBtn.textContent = `VM ${v}개 생성`;
+    if (v > FREE || v < 1) {
+      errEl.style.display = '';
+      goConfirmBtn.disabled = true;
+      previewEl.textContent = '';
+    } else {
+      errEl.style.display = 'none';
+      goConfirmBtn.disabled = false;
+      previewEl.textContent = `생성 후 ${TAKEN + v}개 사용 · 여유 ${FREE - v}`;
+    }
+  }
+  document.getElementById('inc').addEventListener('click', () => { countInput.value = (parseInt(countInput.value, 10) || 0) + 1; syncCount(); });
+  document.getElementById('dec').addEventListener('click', () => { countInput.value = Math.max(1, (parseInt(countInput.value, 10) || 1) - 1); syncCount(); });
+  countInput.addEventListener('input', syncCount);
+  if (FREE > 0) syncCount();
+
+  goConfirmBtn.addEventListener('click', () => {
+    const v = parseInt(countInput.value, 10) || 1;
+    document.getElementById('confirm-count').textContent = v;
+    document.getElementById('hidden-count').value = v;
+    stepInput.style.display = 'none';
+    stepConfirm.style.display = '';
+  });
+  document.getElementById('back-to-input').addEventListener('click', () => {
+    stepConfirm.style.display = 'none';
+    stepInput.style.display = '';
+  });
+
+  // 선택 개수 → sticky 바 표시/숨김
+  const checkboxes = document.querySelectorAll('input[name="vm_ids"]');
+  const stickyBar = document.getElementById('sticky-bar');
+  const selCountEl = document.getElementById('selected-count');
+
+  function hasSelection() {
+    return document.querySelectorAll('input[name="vm_ids"]:checked').length > 0;
+  }
+  function syncSelection() {
+    const n = document.querySelectorAll('input[name="vm_ids"]:checked').length;
+    if (selCountEl) selCountEl.textContent = n + '개 선택됨';
+    if (stickyBar) stickyBar.classList.toggle('show', n > 0);
+    document.body.classList.toggle('has-selection', n > 0);
+  }
+  checkboxes.forEach(cb => cb.addEventListener('change', syncSelection));
+  syncSelection();
+
+  document.getElementById('clear-selection').addEventListener('click', () => {
+    checkboxes.forEach(cb => { cb.checked = false; });
+    syncSelection();
+  });
+
+  const form = document.getElementById('vm-form');
+  if (form) form.addEventListener('submit', (e) => {
+    const action = e.submitter && e.submitter.value;
+    if (action === 'delete_selected') {
+      const n = document.querySelectorAll('input[name="vm_ids"]:checked').length;
+      if (!confirm(`선택한 ${n}개를 회수합니다. 되돌릴 수 없습니다. 계속할까요?`)) e.preventDefault();
+    } else if (action === 'delete_all') {
+      if (!confirm('전체 VM을 회수합니다. 되돌릴 수 없습니다. 계속할까요?')) e.preventDefault();
+    }
+  });
+
+  {% if show_strip %}
+  setInterval(() => {
+    if (!dlg.open && !hasSelection()) location.reload();
+  }, 5000);
+  {% endif %}
+</script>
+{% endblock %}

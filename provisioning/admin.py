@@ -5,7 +5,6 @@ from osclient import vm as osvm
 from . import services
 from .models import Slot, Vm
 
-
 # ── VM 현황 ────────────────────────────────────────────────────
 @admin.register(Slot)
 class SlotAdmin(admin.ModelAdmin):
@@ -39,12 +38,18 @@ class SlotAdmin(admin.ModelAdmin):
 
     @admin.action(description="선택한 슬롯의 VM 회수")
     def reclaim_selected(self, request, queryset):
-        vms = Vm.objects.filter(slot__in=queryset, status=Vm.ACTIVE)
-        done = sum(1 for v in vms if services.request_delete(v.id))
+        targets = Vm.objects.filter(
+            slot_id__in=queryset.values_list("n", flat=True),
+            status=Vm.ACTIVE,
+        )
+        done = sum(1 for v in targets if services.request_delete(v.id))
+        if done == 0:
+            self.message_user(request, "회수할 VM이 없음", messages.WARNING)
+            return
         self.message_user(request, f"{done}건 회수 예약", messages.SUCCESS)
 
 
-# ── VM Log ────────────────────────────────────────────────────
+# ── VM Log ──────────────────────────────────────────────
 @admin.register(Vm)
 class VmAdmin(admin.ModelAdmin):
     list_display = ("id", "slot_id", "status", "fip", "server_id",

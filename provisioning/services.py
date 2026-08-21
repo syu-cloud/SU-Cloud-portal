@@ -1,4 +1,5 @@
 import logging
+import os
 from datetime import timedelta
 
 from django.db import transaction
@@ -11,7 +12,7 @@ from .models import Slot, Vm
 
 log = logging.getLogger(__name__)
 
-KEYFILE = "/opt/su-portal/su-ops.pem"
+KEYFILE = os.environ.get("SU_KEYFILE", "/opt/su-portal/sdk-probe-key.pem")
 CLAIM_TIMEOUT = timedelta(minutes=10)
 
 

@@ -1,0 +1,181 @@
+{% load static %}<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}VM 관리 — SU Cloud Portal{% endblock %}</title>
+{% block extrahead %}{% endblock %}
+<style>
+  :root {
+    --bg: #f4f6f9; --card: #ffffff; --line: #e2e6ec;
+    --text: #1c2530; --muted: #66707d;
+    --accent: #1a5fb4; --ok: #0f8a5f; --warn: #b45309; --err: #d64545;
+    --ok-bg: #e0f0e3; --warn-bg: #fdf0dd; --err-bg: #fbe4e2; --muted-bg: #eceff3;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font-family: "Segoe UI", "Malgun Gothic", system-ui, sans-serif; }
+  header { background: var(--card); border-bottom: 1px solid var(--line);
+           display: flex; align-items: center; justify-content: space-between;
+           padding: 0 24px; height: 56px; }
+  header h1 { font-size: 17px; margin: 0; }
+  main { max-width: 1080px; margin: 24px auto 0; padding: 0 16px 64px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+          padding: 20px 24px; margin-bottom: 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 12.5px; }
+  select, input[type=text], input[type=number] {
+    padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+    font-size: 14px; background: #fff; color: var(--text); }
+  button.primary { background: var(--accent); color: #fff; border: none; border-radius: 8px;
+                   padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button.primary:disabled { background: #a9bcd8; cursor: not-allowed; }
+  button.ghost { background: #fff; border: 1px solid var(--line); border-radius: 6px;
+                 padding: 7px 14px; font-size: 13px; cursor: pointer; color: var(--text); }
+  button.danger { border-color: #efc2c2; color: var(--err); }
+  button.danger:disabled { opacity: .4; cursor: not-allowed; }
+  .badge { display: inline-block; border-radius: 12px; padding: 2px 10px; font-size: 12.5px; }
+  .badge.ok { background: var(--ok-bg); color: var(--ok); }
+  .badge.warn { background: var(--warn-bg); color: var(--warn); }
+  .badge.err { background: var(--err-bg); color: var(--err); }
+  .badge.muted { background: var(--muted-bg); color: var(--muted); }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .muted { color: var(--muted); }
+  .error-text { color: var(--err); font-size: 12.5px; margin-top: 2px; }
+
+  .flash { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
+  .flash.success { background: var(--ok-bg); color: var(--ok); }
+  .flash.error { background: var(--err-bg); color: var(--err); }
+
+  .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line);
+          background: #fff; border-radius: 999px; padding: 6px 14px; font-size: 13px;
+          text-decoration: none; color: var(--text); }
+  .chip .n { font-weight: 700; }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* 진행 스트립 */
+  .strip { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+           padding: 16px 20px; margin-bottom: 16px; }
+  .strip .segbar { display: flex; height: 8px; border-radius: 4px; overflow: hidden;
+                    background: var(--muted-bg); margin-top: 10px; }
+  .strip .seg.done { background: var(--ok); }
+  .strip .seg.failed { background: var(--err); }
+  .strip .seg.running {
+    background-image: repeating-linear-gradient(
+      45deg,
+      #9CA3AF, #9CA3AF 10px,
+      #C4C9D1 10px, #C4C9D1 20px
+    );
+    background-size: 28px 28px;
+    animation: stripe-flow 1s linear infinite;
+  }
+  @keyframes stripe-flow {
+    from { background-position: 0 0; }
+    to   { background-position: 28px 0; }
+  }
+
+  .live-dot { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); }
+  .live-dot .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent);
+    animation: pulse-dot 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .25; }
+  }
+
+  .empty-card { text-align: center; padding: 56px 24px; }
+  .empty-card .icon { font-size: 36px; margin-bottom: 12px; }
+  .empty-card h2 { font-size: 16px; margin: 0 0 8px; }
+  .empty-card p { color: var(--muted); font-size: 13px; margin: 0; }
+
+  /* 선택 회수 sticky 바 */
+  .sticky-bar {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    display: none;
+    background: var(--card); border-top: 2px solid var(--accent);
+    box-shadow: 0 -4px 16px rgba(0,0,0,.08);
+    z-index: 50;
+  }
+  .sticky-bar.show { display: block; }
+  .sticky-bar-inner {
+    max-width: 1080px; margin: 0 auto;
+    padding: 14px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .sticky-bar button { padding: 10px 20px; font-size: 14px; }
+
+  body.has-selection { padding-bottom: 74px; }
+  
+  dialog { border: none; border-radius: 12px; padding: 24px 28px; max-width: 420px;
+           width: 90%; background: var(--card); box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+  dialog::backdrop { background: rgba(28,37,48,.45); }
+  .stepper { display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .stepper button { width: 40px; height: 40px; border-radius: 8px; border: 1px solid var(--line);
+                     background: #fff; font-size: 18px; cursor: pointer; }
+  .stepper input { width: 70px; text-align: center; font-size: 20px; font-weight: 700;
+                    padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
+
+.fail-hover { position: relative; cursor: default; }
+.fail-hover .popover {
+  display: none;
+  position: absolute; top: calc(100% + 10px); left: 12px;
+  width: 260px; z-index: 100;
+  background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 14px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.15);
+}
+.fail-hover .popover::before {
+  content: "";
+  position: absolute; top: -6px; left: 20px;
+  width: 10px; height: 10px;
+  background: var(--card);
+  border-left: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+  transform: rotate(45deg);
+}
+.fail-hover:hover .popover { display: block; }
+.popover-title { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+.popover-desc { font-size: 12.5px; color: var(--text); line-height: 1.5; margin-bottom: 10px; }
+.popover-raw {
+  font-size: 11px; color: var(--muted); line-height: 1.5;
+  border-top: 1px solid var(--line); padding-top: 8px;
+  word-break: break-all;
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="row" style="gap:10px;align-items:baseline">
+    <span style="font-weight:700;color:var(--text);font-size:16px">SU Cloud</span>
+    {% if user.is_authenticated %}
+    <span class="muted" style="font-size:12.5px">VM 관리</span>
+    {% endif %}
+  </div>
+  <div class="row" style="gap:14px">
+    {% if user.is_authenticated %}
+    <span class="row" style="gap:6px;color:var(--muted);font-size:13px">
+      <span
+        style="width:20px;height:20px;border-radius:50%;background:var(--muted-bg);display:inline-flex;align-items:center;justify-content:center;font-size:11px">👤</span>
+      {{ user.username }}
+    </span>
+    <form method="post" action="{% url 'logout' %}" style="display:inline">
+      {% csrf_token %}
+      <button type="submit" class="muted"
+        style="background:none;border:none;font-size:12.5px;cursor:pointer;padding:0;text-decoration:underline;">로그아웃</button>
+    </form>
+    <span style="width:1px;height:16px;background:var(--line)"></span>
+    {% endif %}
+    {% block header_action %}{% endblock %}
+  </div>
+</header>
+<main>
+{% if messages %}
+  {% for m in messages %}<div class="flash {{ m.tags }}">{{ m }}</div>{% endfor %}
+{% endif %}
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>
