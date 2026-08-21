@@ -6,12 +6,13 @@ from . import services
 from .models import Slot, Vm
 
 
+# ── VM 현황 ────────────────────────────────────────────────────
 @admin.register(Slot)
 class SlotAdmin(admin.ModelAdmin):
     list_display = ("n", "status", "fip", "account")
     list_filter = ("status",)
     ordering = ("n",)
-    actions = ["provision_selected"]
+    actions = ["provision_selected", "reclaim_selected"]
 
     @admin.display(description="FIP")
     def fip(self, obj):
@@ -36,15 +37,21 @@ class SlotAdmin(admin.ModelAdmin):
         made = [r for _ in range(n) if (r := services.reserve(""))]
         self.message_user(request, f"{len(made)}건 예약. 워커가 처리함", messages.SUCCESS)
 
+    @admin.action(description="선택한 슬롯의 VM 회수")
+    def reclaim_selected(self, request, queryset):
+        vms = Vm.objects.filter(slot__in=queryset, status=Vm.ACTIVE)
+        done = sum(1 for v in vms if services.request_delete(v.id))
+        self.message_user(request, f"{done}건 회수 예약", messages.SUCCESS)
 
+
+# ── VM Log ────────────────────────────────────────────────────
 @admin.register(Vm)
 class VmAdmin(admin.ModelAdmin):
     list_display = ("id", "slot_id", "status", "fip", "server_id",
-                    "claimed_by", "updated_at")
+                    "claimed_by", "created_at", "updated_at")
     list_filter = ("status",)
-    ordering = ("slot_id", "-id")
+    ordering = ("-updated_at",)
     readonly_fields = [f.name for f in Vm._meta.fields]
-    actions = ["reclaim_selected"]
 
     @admin.display(description="FIP")
     def fip(self, obj):
@@ -52,9 +59,3 @@ class VmAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
-
-    @admin.action(description="선택한 VM 회수")
-    def reclaim_selected(self, request, queryset):
-        done = sum(1 for v in queryset.filter(status=Vm.ACTIVE)
-                   if services.request_delete(v.id))
-        self.message_user(request, f"{done}건 회수 예약", messages.SUCCESS)
