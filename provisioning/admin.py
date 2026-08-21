@@ -5,13 +5,13 @@ from osclient import vm as osvm
 from . import services
 from .models import Slot, Vm
 
-
+# ── Slots ──────────────────────────────────────────────
 @admin.register(Slot)
 class SlotAdmin(admin.ModelAdmin):
     list_display = ("n", "status", "fip", "account")
     list_filter = ("status",)
     ordering = ("n",)
-    actions = ["provision_selected"]
+    actions = ["provision_selected", "reclaim_selected"]
 
     @admin.display(description="FIP")
     def fip(self, obj):
@@ -36,13 +36,26 @@ class SlotAdmin(admin.ModelAdmin):
         made = [r for _ in range(n) if (r := services.reserve(""))]
         self.message_user(request, f"{len(made)}건 예약. 워커가 처리함", messages.SUCCESS)
 
+    @admin.action(description="선택한 슬롯의 VM 회수")
+    def reclaim_selected(self, request, queryset):
+        targets = Vm.objects.filter(
+            slot_id__in=queryset.values_list("n", flat=True),
+            status=Vm.ACTIVE,
+        )
+        done = sum(1 for v in targets if services.request_delete(v.id))
+        if done == 0:
+            self.message_user(request, "회수할 VM이 없음", messages.WARNING)
+            return
+        self.message_user(request, f"{done}건 회수 예약", messages.SUCCESS)
 
+
+# ── Vms ──────────────────────────────────────────────
 @admin.register(Vm)
 class VmAdmin(admin.ModelAdmin):
     list_display = ("id", "slot_id", "status", "fip", "server_id",
-                    "claimed_by", "updated_at")
+                    "claimed_by", "created_at", "updated_at")   
     list_filter = ("status",)
-    ordering = ("slot_id", "-id")
+    ordering = ("-created_at",)
     readonly_fields = [f.name for f in Vm._meta.fields]
     actions = ["reclaim_selected"]
 
