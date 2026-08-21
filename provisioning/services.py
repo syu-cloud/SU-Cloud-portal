@@ -11,7 +11,7 @@ from .models import Slot, Vm
 
 log = logging.getLogger(__name__)
 
-KEYFILE = "/opt/su-portal/sdk-probe-key.pem"
+KEYFILE = "/opt/su-portal/su-ops.pem"
 CLAIM_TIMEOUT = timedelta(minutes=10)
 
 
