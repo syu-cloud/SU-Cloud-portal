@@ -51,7 +51,7 @@ FAILED_DESCRIPTIONS = {
 
 
 def index(request):
-    return HttpResponse("HELLO WORLD!")
+    return redirect("login")
 
 @login_required
 def list_view(request):
