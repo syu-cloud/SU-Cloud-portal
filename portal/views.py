@@ -51,6 +51,8 @@ FAILED_DESCRIPTIONS = {
 
 
 def index(request):
+    if request.user.is_authenticated:
+        return redirect("portal:list")
     return redirect("login")
 
 @login_required
