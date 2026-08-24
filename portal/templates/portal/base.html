@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}VM 관리 — SU Portal{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap" rel="stylesheet">
 {% block extrahead %}{% endblock %}
 <style>
   :root {
@@ -151,7 +153,7 @@
   <div class="row" style="gap:10px;align-items:center">
     <a href="/" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--text)">
       <img src="{% static 'portal/cloudlab-mark.png' %}" alt="" style="height:24px;width:auto">
-      <span style="font-weight:800;font-size:16px;letter-spacing:.08em">SU PORTAL</span>
+      <span style="font-family:Poppins,'Segoe UI',sans-serif;font-weight:600;font-size:16px;letter-spacing:.1em">SU PORTAL</span>
     </a>
     {% if user.is_authenticated %}
     <span class="muted" style="font-size:12.5px">VM 관리</span>
