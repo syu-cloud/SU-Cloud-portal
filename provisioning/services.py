@@ -157,7 +157,7 @@ def _reconcile(conn, vm_rec):
     """실제 상태 대조 · 기존 VM 입양"""
     name = osvm.name_for(vm_rec.slot_id)
     server = next(
-        (s for s in conn.compute.servers(name=name) if s.status != "DELETED"),
+        (s for s in conn.compute.servers(name=name) if s.name == name and s.status != "DELETED"),
         None,
     )
     if server is None:
@@ -191,7 +191,7 @@ def _mark_failed(conn, vm_rec, err):
     name = osvm.name_for(vm_rec.slot_id)
     try:
         server = next(
-            (s for s in conn.compute.servers(name=name) if s.status != "DELETED"),
+            (s for s in conn.compute.servers(name=name) if s.name == name and s.status != "DELETED"),
             None,
         )
         if server is not None:
