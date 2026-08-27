@@ -88,3 +88,5 @@ CSRF_COOKIE_NAME = "suportal_csrftoken"
 
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+LOGIN_REDIRECT_URL = "portal:list"

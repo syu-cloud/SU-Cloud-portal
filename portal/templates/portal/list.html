@@ -77,7 +77,7 @@
         {% for row in rows %}
         <tr>
           <td>
-            <input type="checkbox" name="vm_ids" value="{{ row.vm.id }}" {% if row.vm.status == "PROVISIONING" %}disabled{% endif %}>
+            <input type="checkbox" name="vm_ids" value="{{ row.vm.id }}" {% if row.vm.status != "ACTIVE" and row.vm.status != "FAILED" %}disabled{% endif %}>
           </td>
           <td>{{ row.vm.slot_id|stringformat:"02d" }}</td>
           <td>{{ row.name }}</td>
@@ -134,14 +134,19 @@
     <p class="muted" style="font-size:12px;font-weight:600;margin:0 0 8px">제공 사양 (고정)</p>
     <table style="margin-bottom:18px">
       <tr>
+        <td>💽</td>
+        <td>image</td>
+        <td style="text-align:right">ubuntu-24.04</td>
+      </tr>
+      <tr>
         <td style="width:36px">🖥️</td>
         <td>flavor</td>
         <td style="text-align:right">su-small · 2vCPU · 2GB</td>
       </tr>
       <tr>
-        <td>💽</td>
-        <td>image</td>
-        <td style="text-align:right">ubuntu-24.04</td>
+        <td>💾</td>
+        <td>disk</td>
+        <td style="text-align:right">30GB</td>
       </tr>
       <tr>
         <td>🛡️</td>
