@@ -11,6 +11,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 
 from provisioning.models import Slot, Vm
+from portal.models import DismissedFailure
 from provisioning import services
 from osclient import vm as osvm
 
@@ -27,34 +28,33 @@ def index(request):
 # ── 목록 화면 ─────────────────────────
 @login_required
 def list_view(request):
-
     # -- 쓰기: 전체회수 / 선택회수 (services 호출은 여기뿐) --
     if request.method == "POST":
         action = request.POST.get("action")
-        hidden = set(request.session.get("hidden_vm_ids", []))
 
         if action == "delete_all":
             services.request_delete_all()
             failed_ids = Vm.objects.filter(status=Vm.FAILED).values_list("id", flat=True)
-            hidden.update(failed_ids)
+            DismissedFailure.objects.bulk_create(
+                [DismissedFailure(vm_id=vid) for vid in failed_ids],
+                ignore_conflicts=True,
+            )
         elif action == "delete_selected":
             for vid in request.POST.getlist("vm_ids"):
                 vid = int(vid)
                 rec = Vm.objects.filter(pk=vid).first()
                 if rec and rec.status == Vm.FAILED:
-                    hidden.add(vid)
+                    DismissedFailure.objects.get_or_create(vm_id=vid)
                 else:
                     services.request_delete(vid)
 
-        request.session["hidden_vm_ids"] = list(hidden)
         return redirect("portal:list")
 
     # -- 조회: 전체조회 → 숨김 → 집계 → 필터 → 검색 → 조립 --
     all_vms = Vm.objects.exclude(status=Vm.DELETED).order_by("slot_id")
 
-    hidden = request.session.get("hidden_vm_ids", [])
-    if hidden:
-        all_vms = all_vms.exclude(id__in=hidden)
+    dismissed_ids = DismissedFailure.objects.values_list("vm_id", flat=True)
+    all_vms = all_vms.exclude(id__in=dismissed_ids)
 
     status_counts = {s: 0 for s in STATUS_LIST}
     for v in all_vms:
