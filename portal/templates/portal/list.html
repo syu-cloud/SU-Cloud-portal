@@ -36,7 +36,7 @@
 <div class="card">
   <div class="row" style="justify-content:space-between;margin-bottom:14px">
     <div class="row">
-            <a class="chip {% if not status_filter %}active{% endif %}" href="?q={{ q }}">전체 <span class="n">{{ total_count}}</span></a>
+            <a class="chip {% if not status_filter %}active{% endif %}" href="?q={{ q }}">전체 <span class="n">{{ total_count }}</span></a>
       <a class="chip {% if status_filter == 'ACTIVE' %}active{% endif %}" href="?status=ACTIVE&q={{ q }}">ACTIVE <span
           class="n">{{ status_counts.ACTIVE }}</span></a>
       <a class="chip {% if status_filter == 'PROVISIONING' %}active{% endif %}"
@@ -161,7 +161,7 @@
       <span><strong>{{ taken }}</strong> 사용 · <strong>{{ free }}</strong> 여유 / 최대 {{ total }}</span>
     </div>
     <div style="height:8px;border-radius:4px;background:var(--muted-bg);overflow:hidden;margin-bottom:20px">
-      <div style="height:100%;width:{% widthratio taken total 100 %}%;background:var(--accent)"></div>
+      <div style="height:100%;width:{% if total %}{% widthratio taken total 100 %}{% else %}0{% endif %}%;background:var(--accent)"></div>
     </div>
 
     <p class="muted" style="font-size:13px;font-weight:600;margin:0 0 10px">생성 개수</p>
