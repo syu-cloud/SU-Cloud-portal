@@ -16,11 +16,12 @@ for it in items:
 print("\n=== 없는 태그 ===")
 print(f"count={len(osimage.list_by_tag(conn, 'no-such-tag'))}")
 
-print("\n=== get() — UUID ===")
-print(osimage.get(conn, items[0]["id"]))
-
-print("\n=== get() — 이름 ===")
-print(osimage.get(conn, "ubuntu-24.04"))
-
-print("\n=== get() — 없는 값 ===")
-print(osimage.get(conn, "no-such-image"))
+print("\n=== get() — C-6 검증 조건 ===")
+for target in ["ubuntu-24.04", "su-img-test-1", "cirros", "no-such-image"]:
+    img = osimage.get(conn, target)
+    if img is None:
+        print(f"  {target:16} → 미존재")
+        continue
+    ok = img["status"] == "active" and TAG in img["tags"]
+    print(f"  {target:16} status={img['status']:12} "
+          f"tags={img['tags']} → {'허용' if ok else '거부'}")

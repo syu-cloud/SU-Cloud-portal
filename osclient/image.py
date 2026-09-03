@@ -32,4 +32,5 @@ def get(conn, image_id):
         "min_ram": img.min_ram,
         "visibility": img.visibility,
         "status": img.status,
+        "tags": list(img.tags or []),
     }
