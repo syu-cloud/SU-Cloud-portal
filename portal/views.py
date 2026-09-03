@@ -8,6 +8,8 @@ from provisioning.models import Vm
 from provisioning import services as prov
 from portal import services
 
+from catalog import services as catalog_service
+
 
 # ── 진입점 / 로그인 분기 ─────────────────────────
 
@@ -23,17 +25,42 @@ def index(request):
 @login_required
 def create_view(request):
     """생성 모달 제출 처리. 여유 슬롯을 넘는 요청은 상한으로 잘라낸다"""
+
     if request.method != "POST":
         return redirect("portal:list")
 
     free = services.free_slot_count()
+
     try:
         count = int(request.POST.get("count", 0))
     except ValueError:
         count = 0
+
     count = max(0, min(count, free))
 
-    made = sum(1 for _ in range(count) if prov.reserve(""))
+    # 선택한 Image UUID
+    image_id = request.POST.get("image_id", "")
+
+    # Browser 값은 신뢰하지 않고 Catalog 계층에서 다시 검증
+    try:
+        image = catalog_service.get_portal_image(image_id)
+    except Exception:
+        messages.error(request, "이미지 정보를 확인할 수 없습니다.")
+        return redirect("portal:list")
+
+    if image is None:
+        messages.error(request, "선택한 이미지를 사용할 수 없습니다.")
+        return redirect("portal:list")
+
+    made = sum(
+        1
+        for _ in range(count)
+        if prov.reserve(
+            "",
+            image_id=image["id"],
+            image_name=image["name"],
+        )
+    )
 
     if made:
         messages.success(request, f"{made}대 생성 요청이 접수되었습니다.")

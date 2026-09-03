@@ -1,9 +1,14 @@
 """portal 읽기 경로 서비스 레이어. 조회·집계·조립을 HTTP 와 분리."""
 
+import logging
+
 from provisioning.models import Slot, Vm
 from portal.models import DismissedFailure
 from osclient import vm as osvm
 from portal.labels import FAILED_DESCRIPTIONS
+from catalog import services as catalog_service
+
+log = logging.getLogger(__name__)
 
 STATUS_LIST = [Vm.PROVISIONING, Vm.ACTIVE, Vm.DELETING, Vm.FAILED]
 
@@ -38,6 +43,7 @@ def list_page_data(status_filter="", q=""):
         "total": slots["total"],
         "show_strip": status_counts[Vm.PROVISIONING] > 0,
         "strip_total": strip_total,
+        "images": image_catalog(),
     }
 
 
@@ -138,6 +144,14 @@ def friendly_label(error: str) -> str:
 
 
 # ══ 생성 화면 보조 ══════════════════════════════════════
+
+def image_catalog():
+    """생성 화면용 Image 목록."""
+    try:
+        return catalog_service.list_portal_images()
+    except Exception:
+        log.exception("image catalog lookup failed")
+        return []
 
 def free_slot_count():
     """생성 요청 개수 상한. create_view 에서 입력값 clamp 에 사용"""
