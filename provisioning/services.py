@@ -18,7 +18,7 @@ CLAIM_TIMEOUT = timedelta(minutes=10)
 
 # ── 요청 접수 ──────────────────────────────────────────────
 
-def reserve(student_id):
+def reserve(student_id, image_id=None, image_name=""):
     """빈 슬롯 예약"""
     with transaction.atomic():
         slot = (
@@ -34,7 +34,12 @@ def reserve(student_id):
         slot.status = Slot.TAKEN
         slot.save(update_fields=["status"])
 
-        return Vm.objects.create(slot=slot, student_id=student_id)
+        return Vm.objects.create(
+            slot=slot,
+            student_id=student_id,
+            image_id=image_id,
+            image_name=image_name,
+        )
 
 
 def request_delete(vm_id):
@@ -93,7 +98,8 @@ def provision(vm_id):
 
     if not adopted:
         try:
-            server = osvm.create(conn, vm_rec.slot_id, KEYFILE)
+            image_id = str(vm_rec.image_id) if vm_rec.image_id else None
+            server = osvm.create(conn, vm_rec.slot_id, KEYFILE, image_id=image_id)
         except Exception as e:
             _mark_failed(conn, vm_rec, f"{type(e).__name__}: {e}")
             raise

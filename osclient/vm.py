@@ -53,14 +53,14 @@ def wait_ssh(host, user, key_path, timeout=300):
     raise TimeoutError(f"ssh unreachable: {user}@{host}")
 
 
-def create(conn, n, key_path):
+def create(conn, n, key_path, image_id=None):
     """VM 생성 → FIP 연결 → SSH 도달까지. 실패 시 예외를 올림."""
     keypair = os.environ["SU_KEYPAIR"]
     pubkey = conn.compute.get_keypair(keypair).public_key
 
     server = conn.compute.create_server(
         name=name_for(n),
-        image_id=os.environ["SU_IMAGE_ID"],
+        image_id=image_id or os.environ["SU_IMAGE_ID"],
         flavor_id=os.environ["SU_FLAVOR_ID"],
         networks=[{"uuid": os.environ["SU_NETWORK_ID"]}],
         key_name=keypair,
