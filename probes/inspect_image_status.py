@@ -1,11 +1,6 @@
-"""
-tag + status 조합 필터 실측.
+"""tag + status 조합 필터 실측.
 
-목적: osclient.image.list_by_tag()에 status="active"를 함께 넣을지 판정.
-      tag 단독 동작은 확인했으나, 조합은 미검증임.
-
-전제: su-img-test-1 을 일시적으로 deactivated 로 전환한 뒤 실행.
-      검증 후 반드시 --activate 로 복구할 것.
+실행 전 su-img-test-1 을 --deactivate, 실행 후 --activate 로 복구.
 """
 import osclient
 
