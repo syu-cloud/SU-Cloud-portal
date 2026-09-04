@@ -48,5 +48,45 @@ class Vm(models.Model):
     class Meta:
         indexes = [models.Index(fields=["status", "created_at"])]
 
+def __str__(self):
+    return f"vm{self.slot_id}/{self.student_id}({self.status})"
+
+
+class VmFailure(models.Model):
+    """FAILED VM의 잔여 자원 정리 및 확인 상태."""
+
+    CLEANED = "CLEANED"
+    CLEANUP_FAILED = "CLEANUP_FAILED"
+
+    CLEANUP_STATUS = [
+        (CLEANED, CLEANED),
+        (CLEANUP_FAILED, CLEANUP_FAILED),
+    ]
+
+    vm = models.OneToOneField(
+        Vm,
+        on_delete=models.PROTECT,
+        related_name="failure",
+    )
+
+    # FAILED 이후 잔여 자원 정리 결과
+    cleanup_status = models.CharField(
+        max_length=16,
+        choices=CLEANUP_STATUS,
+    )
+
+    # 잔여 자원 정리 중 발생한 오류
+    cleanup_error = models.TextField(
+        blank=True,
+        default="",
+    )
+
+    # cleanup 완료된 FAILED 건을 사용자가 확인한 시각
+    # 값이 있으면 일반 VM 목록에서 제외
+    acknowledged_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
     def __str__(self):
-        return f"vm{self.slot_id}/{self.student_id}({self.status})"
+        return f"VmFailure(vm={self.vm_id}, cleanup={self.cleanup_status})"

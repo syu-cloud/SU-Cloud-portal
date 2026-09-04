@@ -4,7 +4,6 @@ from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 
-from provisioning.models import Vm
 from provisioning import services as prov
 from portal import services
 
@@ -88,20 +87,14 @@ def list_view(request):
 
 
 def _handle_reclaim(request):
-    """회수 처리. FAILED 는 삭제할 자원이 없어 숨김으로 대체한다"""
+    """선택·전체 회수 요청을 provisioning 계층에 전달한다."""
     action = request.POST.get("action")
 
     if action == "delete_all":
-        prov.request_delete_all()
-        services.dismiss_all_failed()
+        prov.request_reclaim_all()
 
     elif action == "delete_selected":
         for vid in request.POST.getlist("vm_ids"):
-            vid = int(vid)
-            rec = Vm.objects.filter(pk=vid).first()
-            if rec and rec.status == Vm.FAILED:
-                services.dismiss(vid)
-            else:
-                prov.request_delete(vid)
+            prov.request_reclaim(int(vid))
 
     return redirect("portal:list")
