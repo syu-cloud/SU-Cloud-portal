@@ -27,8 +27,8 @@
   <div class="icon">🖥️</div>
   <h2>아직 생성된 VM이 없어요</h2>
   <p>
-    su-small · vCPU 2 / RAM 2GB / Disk 30GB · Ubuntu 24.04 LTS<br>
-    Security Group default (SSH만 허용)
+    su-small · vCPU 2 / RAM 2GB / Disk 30GB<br>
+    이미지는 VM 생성 시 선택 · Security Group default (SSH만 허용)
   </p>
 </div>
 {% else %}
@@ -67,6 +67,7 @@
           <th></th>
           <th>슬롯</th>
           <th>이름</th>
+          <th>이미지</th>
           <th>FIP</th>
           <th>계정</th>
           <th>상태</th>
@@ -81,6 +82,7 @@
           </td>
           <td>{{ row.vm.slot_id|stringformat:"02d" }}</td>
           <td>{{ row.name }}</td>
+          <td class="muted">{{ row.vm.image_name|default:"—" }}</td>
           <td>{{ row.fip }}</td>
           <td class="muted">{{ row.user }}</td>
           <td style="position:relative">
@@ -104,7 +106,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="7" class="muted">조건에 맞는 VM이 없습니다.</td>
+          <td colspan="8" class="muted">조건에 맞는 VM이 없습니다.</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -131,12 +133,20 @@
   </div>
 
   <div id="step-input">
-    <p class="muted" style="font-size:12px;font-weight:600;margin:0 0 8px">제공 사양 (고정)</p>
+    <p class="muted" style="font-size:12px;font-weight:600;margin:0 0 8px">VM 생성 설정</p>
     <table style="margin-bottom:18px">
       <tr>
         <td>💽</td>
         <td>image</td>
-        <td style="text-align:right">ubuntu-24.04</td>
+        <td style="text-align:right">
+          <select id="image-select" style="width:100%">
+            {% for img in images %}
+            <option value="{{ img.id }}">{{ img.name }}</option>
+            {% empty %}
+            <option value="">사용 가능한 이미지 없음</option>
+            {% endfor %}
+          </select>
+        </td>
       </tr>
       <tr>
         <td style="width:36px">🖥️</td>
@@ -177,7 +187,7 @@
 
     <div class="row" style="margin-top:20px;gap:10px">
       <button type="button" id="cancel-create" class="ghost" style="flex:1">취소</button>
-      <button type="button" id="go-confirm" class="primary" style="flex:2" {% if free == 0 %}disabled{% endif %}>
+      <button type="button" id="go-confirm" class="primary" style="flex:2" {% if free == 0 or not images %}disabled{% endif %}>
         VM 1개 생성
       </button>
     </div>
@@ -190,6 +200,8 @@
     <form method="post" action="{% url 'portal:create' %}">
       {% csrf_token %}
       <input type="hidden" name="count" id="hidden-count" value="1">
+      <input type="hidden" name="image_id" id="hidden-image" value="">
+
       <div class="row" style="gap:10px">
         <button type="button" id="back-to-input" class="ghost" style="flex:1">이전</button>
         <button type="submit" class="primary" style="flex:2">생성 시작</button>
@@ -217,32 +229,42 @@
   const goConfirmBtn = document.getElementById('go-confirm');
   const errEl = document.getElementById('count-error');
   const previewEl = document.getElementById('preview-text');
+  const imageSelect = document.getElementById('image-select');
 
   function syncCount() {
-    let v = parseInt(countInput.value, 10) || 0;
-    goConfirmBtn.textContent = `VM ${v}개 생성`;
-    if (v > FREE || v < 1) {
-      errEl.style.display = '';
-      goConfirmBtn.disabled = true;
-      previewEl.textContent = '';
-    } else {
-      errEl.style.display = 'none';
-      goConfirmBtn.disabled = false;
-      previewEl.textContent = `생성 후 ${TAKEN + v}개 사용 · 여유 ${FREE - v}`;
+      let v = parseInt(countInput.value, 10) || 0;
+      const hasImage = imageSelect && imageSelect.value !== '';
+
+      goConfirmBtn.textContent = `VM ${v}개 생성`;
+
+      if (v > FREE || v < 1) {
+        errEl.style.display = '';
+        goConfirmBtn.disabled = true;
+        previewEl.textContent = '';
+      } else {
+        errEl.style.display = 'none';
+        goConfirmBtn.disabled = !hasImage;
+        previewEl.textContent = `생성 후 ${TAKEN + v}개 사용 · 여유 ${FREE - v}`;
+      }
     }
-  }
   document.getElementById('inc').addEventListener('click', () => { countInput.value = (parseInt(countInput.value, 10) || 0) + 1; syncCount(); });
   document.getElementById('dec').addEventListener('click', () => { countInput.value = Math.max(1, (parseInt(countInput.value, 10) || 1) - 1); syncCount(); });
   countInput.addEventListener('input', syncCount);
+  imageSelect.addEventListener('change', syncCount);
+
   if (FREE > 0) syncCount();
 
   goConfirmBtn.addEventListener('click', () => {
-    const v = parseInt(countInput.value, 10) || 1;
-    document.getElementById('confirm-count').textContent = v;
-    document.getElementById('hidden-count').value = v;
-    stepInput.style.display = 'none';
-    stepConfirm.style.display = '';
-  });
+      const v = parseInt(countInput.value, 10) || 1;
+
+      document.getElementById('confirm-count').textContent = v;
+      document.getElementById('hidden-count').value = v;
+      document.getElementById('hidden-image').value =
+        document.getElementById('image-select').value;
+
+      stepInput.style.display = 'none';
+      stepConfirm.style.display = '';
+    });
   document.getElementById('back-to-input').addEventListener('click', () => {
     stepConfirm.style.display = 'none';
     stepInput.style.display = '';

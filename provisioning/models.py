@@ -30,6 +30,10 @@ class Vm(models.Model):
 
     slot = models.ForeignKey(Slot, on_delete=models.PROTECT, related_name="vms")
     student_id = models.CharField(max_length=32, blank=True)
+
+    image_id = models.UUIDField(null=True, blank=True)
+    image_name = models.CharField(max_length=255, blank=True)
+    
     status = models.CharField(max_length=16, choices=STATUS, default=PROVISIONING)
 
     server_id = models.UUIDField(null=True, blank=True)
