@@ -78,7 +78,7 @@
         {% for row in rows %}
         <tr>
           <td>
-            <input type="checkbox" name="vm_ids" value="{{ row.vm.id }}" {% if row.vm.status != "ACTIVE" and row.vm.status != "FAILED" %}disabled{% endif %}>
+            <input type="checkbox" name="vm_ids" value="{{ row.vm.id }}" {% if not row.can_reclaim %}disabled{% endif %}>
           </td>
           <td>{{ row.vm.slot_id|stringformat:"02d" }}</td>
           <td>{{ row.name }}</td>
@@ -287,10 +287,14 @@
   checkboxes.forEach(cb => cb.addEventListener('change', syncSelection));
   syncSelection();
 
-  document.getElementById('clear-selection').addEventListener('click', () => {
-    checkboxes.forEach(cb => { cb.checked = false; });
-    syncSelection();
-  });
+  const clearSelectionBtn = document.getElementById('clear-selection');
+
+    if (clearSelectionBtn) {
+      clearSelectionBtn.addEventListener('click', () => {
+        checkboxes.forEach(cb => { cb.checked = false; });
+        syncSelection();
+      });
+    }
 
   const form = document.getElementById('vm-form');
   if (form) form.addEventListener('submit', (e) => {

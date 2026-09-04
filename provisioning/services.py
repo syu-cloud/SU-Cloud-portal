@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from osclient import get_conn, vm as osvm
 from wgclient import get_wg                       # [ADDED]
-from .models import Slot, Vm
+from .models import Slot, Vm, VmFailure
 
 log = logging.getLogger(__name__)
 
@@ -65,6 +65,75 @@ def request_delete_all():
     )
     return [rec for i in ids if (rec := request_delete(i)) is not None]
 
+
+def acknowledge_failure(vm_id):
+    """cleanup 완료된 FAILED 건 확인 처리"""
+    with transaction.atomic():
+        failure = (
+            VmFailure.objects
+            .select_for_update()
+            .select_related("vm")
+            .filter(vm_id=vm_id)
+            .first()
+        )
+
+        if failure is None:
+            return None
+
+        if failure.vm.status != Vm.FAILED:
+            return None
+
+        if failure.cleanup_status != VmFailure.CLEANED:
+            return None
+
+        if failure.acknowledged_at is not None:
+            return failure
+
+        failure.acknowledged_at = timezone.now()
+        failure.save(update_fields=["acknowledged_at"])
+        return failure
+
+
+def acknowledge_all_cleaned_failures():
+    """cleanup 완료된 FAILED 건 전체 확인 처리"""
+    vm_ids = list(
+        VmFailure.objects
+        .filter(
+            vm__status=Vm.FAILED,
+            cleanup_status=VmFailure.CLEANED,
+            acknowledged_at__isnull=True,
+        )
+        .order_by("vm__slot_id")
+        .values_list("vm_id", flat=True)
+    )
+
+    return [
+        failure
+        for vm_id in vm_ids
+        if (failure := acknowledge_failure(vm_id)) is not None
+    ]
+
+
+def request_reclaim(vm_id):
+    """VM 상태에 따라 회수 요청을 처리한다."""
+    rec = Vm.objects.filter(pk=vm_id).first()
+
+    if rec is None:
+        return None
+
+    if rec.status == Vm.ACTIVE:
+        return request_delete(vm_id)
+
+    if rec.status == Vm.FAILED:
+        return acknowledge_failure(vm_id)
+
+    return None
+
+
+def request_reclaim_all():
+    """회수 가능한 ACTIVE와 cleanup 완료 FAILED를 전체 처리한다."""
+    request_delete_all()
+    acknowledge_all_cleaned_failures()
 
 # ── 작업 실행 ──────────────────────────────────────────────
 
@@ -195,18 +264,47 @@ def _mark_failed(conn, vm_rec, err):
         vm_rec.save(update_fields=["status", "error", "updated_at"])
 
     name = osvm.name_for(vm_rec.slot_id)
+
     try:
         server = next(
-            (s for s in conn.compute.servers(name=name) if s.name == name and s.status != "DELETED"),
+            (
+                s
+                for s in conn.compute.servers(name=name)
+                if s.name == name and s.status != "DELETED"
+            ),
             None,
         )
+
         if server is not None:
             osvm.delete(conn, server.id)
-    except Exception:
+
+    except Exception as e:
+        # cleanup 실패 결과를 DB에 기록.
+        # Slot은 기존대로 TAKEN 상태를 유지한다.
+        VmFailure.objects.update_or_create(
+            vm=vm_rec,
+            defaults={
+                "cleanup_status": VmFailure.CLEANUP_FAILED,
+                "cleanup_error": f"{type(e).__name__}: {e}"[:2000],
+            },
+        )
+
         log.exception("cleanup failed for %s - slot stays TAKEN", name)
         return
 
-    _free_slot(vm_rec.slot_id)
+    # cleanup이 정상적으로 끝난 경우
+    # Slot FREE와 cleanup 완료 기록을 한 트랜잭션으로 처리한다.
+    with transaction.atomic():
+        slot = Slot.objects.select_for_update().get(pk=vm_rec.slot_id)
+        slot.status = Slot.FREE
+        slot.save(update_fields=["status"])
+
+        VmFailure.objects.update_or_create(
+            vm=vm_rec,
+            defaults={
+                "cleanup_status": VmFailure.CLEANED,
+            },
+        )
 
 
 def _release(vm_rec):
@@ -216,13 +314,5 @@ def _release(vm_rec):
         vm_rec.save(update_fields=["status", "updated_at"])
 
         slot = Slot.objects.select_for_update().get(pk=vm_rec.slot_id)
-        slot.status = Slot.FREE
-        slot.save(update_fields=["status"])
-
-
-def _free_slot(n):
-    """슬롯 해제"""
-    with transaction.atomic():
-        slot = Slot.objects.select_for_update().get(pk=n)
         slot.status = Slot.FREE
         slot.save(update_fields=["status"])

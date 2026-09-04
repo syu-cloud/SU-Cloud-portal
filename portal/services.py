@@ -3,7 +3,6 @@
 import logging
 
 from provisioning.models import Slot, Vm
-from portal.models import DismissedFailure
 from osclient import vm as osvm
 from portal.labels import FAILED_DESCRIPTIONS
 from catalog import services as catalog_service
@@ -50,10 +49,14 @@ def list_page_data(status_filter="", q=""):
 # ── 조회 ─────────────────────────
 
 def visible_vms():
-    """노출 대상 VM. Vm 은 append-only 라 DELETED 이력과 숨김 처리분을 제외한다"""
-    qs = Vm.objects.exclude(status=Vm.DELETED).order_by("slot_id")
-    dismissed_ids = DismissedFailure.objects.values_list("vm_id", flat=True)
-    return qs.exclude(id__in=dismissed_ids)
+    """노출 대상 VM. DELETED 이력과 확인 완료된 FAILED 건은 제외한다."""
+    return (
+        Vm.objects
+        .exclude(status=Vm.DELETED)
+        .exclude(failure__acknowledged_at__isnull=False)
+        .select_related("failure")
+        .order_by("slot_id")
+    )
 
 
 # ── 집계 ─────────────────────────
@@ -99,21 +102,40 @@ def apply_search(vms, q):
 # ── 화면용 조립 ─────────────────────────
 
 def build_rows(vms):
-    """테이블 행 조립. PROVISIONING 은 아직 FIP·계정이 확정 전이라 '—' 로 가린다"""
+    """테이블 행 조립. 상태에 따라 화면 표시용 정보를 구성한다."""
     rows = []
+
     for v in vms:
-        row = {"vm": v, "name": osvm.name_for(v.slot_id)}
+        row = {
+            "vm": v,
+            "name": osvm.name_for(v.slot_id),
+            "can_reclaim": v.status == Vm.ACTIVE,
+        }
+
         if v.status == Vm.PROVISIONING:
             row["fip"] = "—"
             row["user"] = "—"
         else:
             row["fip"] = osvm.fip_for(v.slot_id)
             row["user"] = osvm.user_for(v.slot_id)
+
         if v.status == Vm.FAILED:
             label = friendly_label(v.error or "")
             row["fail_label"] = label
-            row["fail_desc"] = FAILED_DESCRIPTIONS.get(label, FAILED_DESCRIPTIONS["실패"])
+            row["fail_desc"] = FAILED_DESCRIPTIONS.get(
+                label,
+                FAILED_DESCRIPTIONS["실패"],
+            )
+
+            failure = getattr(v, "failure", None)
+
+            row["can_reclaim"] = (
+                failure is not None
+                and failure.cleanup_status == failure.CLEANED
+            )
+
         rows.append(row)
+
     return rows
 
 
@@ -156,22 +178,3 @@ def image_catalog():
 def free_slot_count():
     """생성 요청 개수 상한. create_view 에서 입력값 clamp 에 사용"""
     return Slot.objects.filter(status=Slot.FREE).count()
-
-
-# ══ 회수 화면 보조 ══════════════════════════════════════
-# [Phase 0.5 임시] FAILED 는 회수 대신 화면 숨김으로 처리한다.
-# 정리 성공(슬롯 FREE)과 정리 실패(슬롯 TAKEN 유지)를 구분하지 못해
-# 숨기면 안 되는 건까지 숨겨질 수 있음 — 관리자 화면 분리 시 재설계 대상.
-
-def dismiss(vm_id):
-    """FAILED 한 건 숨김"""
-    DismissedFailure.objects.get_or_create(vm_id=vm_id)
-
-
-def dismiss_all_failed():
-    """전체 회수 시 FAILED 일괄 숨김"""
-    failed_ids = Vm.objects.filter(status=Vm.FAILED).values_list("id", flat=True)
-    DismissedFailure.objects.bulk_create(
-        [DismissedFailure(vm_id=vid) for vid in failed_ids],
-        ignore_conflicts=True,
-    )
