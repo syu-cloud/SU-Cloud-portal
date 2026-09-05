@@ -48,8 +48,8 @@ class Vm(models.Model):
     class Meta:
         indexes = [models.Index(fields=["status", "created_at"])]
 
-def __str__(self):
-    return f"vm{self.slot_id}/{self.student_id}({self.status})"
+    def __str__(self):
+        return f"vm{self.slot_id}/{self.student_id}({self.status})"
 
 
 class VmFailure(models.Model):
