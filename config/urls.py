@@ -7,6 +7,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path("", views.index, name="index"),
     path("portal/", include("portal.urls")),
+    path("images/", include("portal.image_urls")),
     path("accounts/login/", auth_views.LoginView.as_view(
     template_name="portal/login.html",
     redirect_authenticated_user=True,

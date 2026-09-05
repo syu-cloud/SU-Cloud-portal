@@ -1,0 +1,744 @@
+{% extends "portal/base.html" %}
+
+{% block title %}이미지 관리 — SU Portal{% endblock %}
+
+{% block section_name %}이미지 관리{% endblock %}
+
+
+{% block header_action %}
+<button
+    class="primary"
+    type="button"
+    id="open-create"
+    {% if active_build %}disabled{% endif %}
+>
+    + 새 이미지 만들기
+</button>
+{% endblock %}
+
+
+{% block content %}
+
+<div class="card">
+    <div class="row" style="justify-content:space-between">
+        <div>
+            <h2 style="font-size:16px;margin:0 0 6px">
+                이미지 관리
+            </h2>
+
+            <p class="muted" style="font-size:13px;margin:0">
+                수업에 사용할 Custom Image를 제작하고 관리합니다.
+            </p>
+        </div>
+    </div>
+</div>
+
+
+{# ====================================================== #}
+{# 현재 제작 중 #}
+{# ====================================================== #}
+
+{% if active_build %}
+
+<div style="margin:22px 0 10px">
+    <strong style="font-size:14px">
+        현재 제작 중
+    </strong>
+</div>
+
+<div class="card">
+
+    {# 이미지 이름 / 상태 #}
+    <div class="row" style="justify-content:space-between">
+
+        <div>
+            <strong>
+                {{ active_build.name }}
+            </strong>
+
+            <div class="muted" style="font-size:13px;margin-top:6px">
+                {{ active_build.base_image_name }} 기반
+            </div>
+        </div>
+
+
+        <div>
+
+            {% if active_build.status == "CREATING" %}
+
+            <div class="live-dot">
+                <span class="dot"></span>
+
+                <span class="badge warn">
+                    준비 중
+                </span>
+            </div>
+
+
+            {% elif active_build.status == "READY" %}
+
+            <span class="badge ok">
+                설정 가능
+            </span>
+
+
+            {% elif active_build.status == "SNAPSHOTTING" %}
+
+            <div class="live-dot">
+                <span class="dot"></span>
+
+                <span class="badge warn">
+                    이미지 생성 중
+                </span>
+            </div>
+
+
+            {% elif active_build.status == "CANCELING" %}
+
+            <div class="live-dot">
+                <span class="dot"></span>
+
+                <span class="badge warn">
+                    제작 취소 중
+                </span>
+            </div>
+
+            {% endif %}
+
+        </div>
+
+    </div>
+
+
+    {# ================================================== #}
+    {# 3단계 진행 표시 #}
+    {# ================================================== #}
+
+    <div style="
+        margin-top:20px;
+        padding:18px 10px 4px;
+        border-top:1px solid var(--line);
+    ">
+
+        <div style="
+            display:grid;
+            grid-template-columns:1fr auto 1fr auto 1fr;
+            align-items:center;
+        ">
+
+            {# 1단계: 제작 환경 준비 #}
+            <div style="text-align:center">
+                <div style="
+                    width:14px;
+                    height:14px;
+                    margin:0 auto;
+                    border-radius:50%;
+                    background:var(--accent);
+                    border:2px solid var(--accent);
+                "></div>
+            </div>
+
+
+            {# 1 → 2 연결선 #}
+            <div style="
+                width:100%;
+                min-width:80px;
+                height:2px;
+                {% if active_build.status == "READY" or active_build.status == "SNAPSHOTTING" or active_build.status == "CANCELING" %}
+                background:var(--accent);
+                {% else %}
+                background:var(--line);
+                {% endif %}
+            "></div>
+
+
+            {# 2단계: 환경 설정 #}
+            <div style="text-align:center">
+                <div style="
+                    width:14px;
+                    height:14px;
+                    margin:0 auto;
+                    border-radius:50%;
+                    {% if active_build.status == "READY" or active_build.status == "SNAPSHOTTING" or active_build.status == "CANCELING" %}
+                    background:var(--accent);
+                    border:2px solid var(--accent);
+                    {% else %}
+                    background:var(--card);
+                    border:2px solid var(--line);
+                    {% endif %}
+                "></div>
+            </div>
+
+
+            {# 2 → 3 연결선 #}
+            <div style="
+                width:100%;
+                min-width:80px;
+                height:2px;
+                {% if active_build.status == "SNAPSHOTTING" %}
+                background:var(--accent);
+                {% else %}
+                background:var(--line);
+                {% endif %}
+            "></div>
+
+
+            {# 3단계: 이미지 생성 #}
+            <div style="text-align:center">
+                <div style="
+                    width:14px;
+                    height:14px;
+                    margin:0 auto;
+                    border-radius:50%;
+                    {% if active_build.status == "SNAPSHOTTING" %}
+                    background:var(--accent);
+                    border:2px solid var(--accent);
+                    {% else %}
+                    background:var(--card);
+                    border:2px solid var(--line);
+                    {% endif %}
+                "></div>
+            </div>
+
+        </div>
+
+
+        <div style="
+            display:grid;
+            grid-template-columns:1fr 1fr 1fr;
+            margin-top:8px;
+            font-size:12px;
+            font-weight:600;
+            text-align:center;
+        ">
+            <div>제작 환경 준비</div>
+            <div>환경 설정</div>
+            <div>이미지 생성</div>
+        </div>
+
+    </div>
+
+
+    {# ================================================== #}
+    {# 상태별 안내 / 버튼 #}
+    {# ================================================== #}
+
+    <div style="
+        margin-top:18px;
+        padding-top:16px;
+        border-top:1px solid var(--line);
+    ">
+
+        {% if active_build.status == "CREATING" %}
+
+        <div
+            class="muted"
+            style="font-size:13px;line-height:1.6"
+        >
+            이미지 제작 환경을 준비하고 있습니다.
+            준비가 완료되면 Warpgate에서 설정할 수 있습니다.
+        </div>
+
+
+        {% elif active_build.status == "READY" %}
+
+        <div
+            class="muted"
+            style="
+                font-size:13px;
+                line-height:1.6;
+                margin-bottom:14px;
+            "
+        >
+            제작 환경이 준비되었습니다.
+            Warpgate에서 필요한 프로그램과 설정을 구성한 뒤
+            이미지 생성을 진행하세요.
+        </div>
+
+
+        <div
+            class="muted"
+            style="font-size:12px;margin-bottom:14px"
+        >
+            Warpgate 계정:
+            <strong>{{ warpgate_username }}</strong>
+        </div>
+
+
+        <div
+            class="row"
+            style="gap:10px;flex-wrap:wrap"
+        >
+
+            {% if warpgate_url %}
+
+            <button
+                type="button"
+                class="ghost"
+                onclick="window.open(
+                    '{{ warpgate_url|escapejs }}',
+                    '_blank'
+                )"
+            >
+                Warpgate 연결
+            </button>
+
+            {% else %}
+
+            <button
+                type="button"
+                class="ghost"
+                disabled
+            >
+                Warpgate 주소 미설정
+            </button>
+
+            {% endif %}
+
+
+            <form
+                method="post"
+                action="{% url 'imagebuild:publish' active_build.id %}"
+                style="margin:0"
+                onsubmit="
+                    return confirm(
+                        '설정을 완료했나요? 이미지 생성을 시작하면 제작 환경에 다시 접속할 수 없습니다.'
+                    );
+                "
+            >
+                {% csrf_token %}
+
+                <button
+                    type="submit"
+                    class="primary"
+                >
+                    이미지 생성
+                </button>
+            </form>
+
+
+            <form
+                method="post"
+                action="{% url 'imagebuild:cancel' active_build.id %}"
+                style="margin:0"
+                onsubmit="
+                    return confirm(
+                        '현재 이미지 제작을 취소하시겠습니까? 제작 환경은 삭제되며 되돌릴 수 없습니다.'
+                    );
+                "
+            >
+                {% csrf_token %}
+
+                <button
+                    type="submit"
+                    class="ghost"
+                    style="
+                        color:#b42318;
+                        border-color:#f0b8b3;
+                    "
+                >
+                    제작 취소
+                </button>
+            </form>
+
+        </div>
+
+
+        {% elif active_build.status == "SNAPSHOTTING" %}
+
+        <div
+            class="muted"
+            style="font-size:13px;line-height:1.6"
+        >
+            제작 환경을 정리하고
+            Custom Image를 생성하고 있습니다.
+            완료될 때까지 잠시 기다려주세요.
+        </div>
+
+
+        {% elif active_build.status == "CANCELING" %}
+
+        <div
+            class="muted"
+            style="font-size:13px;line-height:1.6"
+        >
+            이미지 제작을 취소하고 있습니다.
+            제작 환경과 Warpgate 연결을 정리하고 있습니다.
+        </div>
+
+        {% endif %}
+
+    </div>
+
+
+    <div
+        class="muted"
+        style="font-size:12px;margin-top:14px"
+    >
+        제작 시작:
+        {{ active_build.created_at|date:"Y-m-d H:i" }}
+    </div>
+
+</div>
+
+{% endif %}
+
+
+{# ====================================================== #}
+{# 생성된 이미지 #}
+{# ====================================================== #}
+
+<div style="margin:22px 0 10px">
+    <strong style="font-size:14px">
+        생성된 이미지
+    </strong>
+
+    <div
+        class="muted"
+        style="font-size:12px;margin-top:5px"
+    >
+        VM 생성 시 아래 이미지를 선택하여 사용할 수 있습니다.
+    </div>
+</div>
+
+
+{% if published_builds %}
+
+<div class="card">
+
+    <table>
+        <thead>
+            <tr>
+                <th>이미지 이름</th>
+                <th>기반 이미지</th>
+                <th>생성일</th>
+                <th>상태</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+            {% for build in published_builds %}
+
+            <tr>
+                <td>
+                    <strong>
+                        {{ build.name }}
+                    </strong>
+                </td>
+
+                <td class="muted">
+                    {{ build.base_image_name|default:"—" }}
+                </td>
+
+                <td class="muted">
+                    {{ build.updated_at|date:"Y-m-d H:i" }}
+                </td>
+
+                <td>
+                    <span class="badge ok">
+                        사용 가능
+                    </span>
+                </td>
+            </tr>
+
+            {% endfor %}
+
+        </tbody>
+    </table>
+
+</div>
+
+
+{% else %}
+
+<div class="card empty-card">
+
+    <div class="icon">
+        💽
+    </div>
+
+    <h2>
+        아직 생성된 이미지가 없습니다
+    </h2>
+
+    <p>
+        새 이미지 만들기를 눌러
+        수업용 Custom Image를 제작할 수 있습니다.
+    </p>
+
+</div>
+
+{% endif %}
+
+
+{# ====================================================== #}
+{# 최근 실패 #}
+{# ====================================================== #}
+
+{% if failed_builds %}
+
+<div style="margin:22px 0 10px">
+    <strong style="font-size:14px">
+        최근 실패
+    </strong>
+</div>
+
+<div
+    class="card"
+    style="padding:0;overflow:hidden"
+>
+
+    {% for build in failed_builds %}
+
+    <div style="
+        padding:16px 22px;
+        {% if not forloop.last %}
+        border-bottom:1px solid #e5e7eb;
+        {% endif %}
+    ">
+
+        <div
+            class="row"
+            style="justify-content:space-between"
+        >
+
+            <div>
+                <strong style="font-size:13px">
+                    {{ build.name }}
+                </strong>
+
+                <div
+                    class="muted"
+                    style="
+                        font-size:12px;
+                        margin-top:5px;
+                    "
+                >
+                    {{ build.base_image_name }} 기반
+                </div>
+            </div>
+
+            <span class="badge err">
+                실패
+            </span>
+
+        </div>
+
+
+        {% if build.error %}
+
+        <div
+            class="muted"
+            style="
+                font-size:12px;
+                line-height:1.5;
+                margin-top:10px;
+                word-break:break-word;
+            "
+        >
+            {{ build.error }}
+        </div>
+
+        {% endif %}
+
+    </div>
+
+    {% endfor %}
+
+</div>
+
+{% endif %}
+
+
+{# ====================================================== #}
+{# 새 이미지 만들기 Modal #}
+{# ====================================================== #}
+
+<dialog id="create-dialog">
+
+    <div
+        class="row"
+        style="
+            justify-content:space-between;
+            margin-bottom:18px;
+        "
+    >
+
+        <strong style="font-size:16px">
+            새 이미지 만들기
+        </strong>
+
+        <button
+            type="button"
+            id="close-create"
+            style="
+                border:none;
+                background:none;
+                font-size:18px;
+                cursor:pointer;
+            "
+        >
+            ×
+        </button>
+
+    </div>
+
+
+    <form
+        method="post"
+        action="{% url 'imagebuild:create' %}"
+    >
+
+        {% csrf_token %}
+
+
+        <p
+            class="muted"
+            style="
+                font-size:12px;
+                font-weight:600;
+                margin-bottom:8px;
+            "
+        >
+            이미지 이름
+        </p>
+
+        <input
+            type="text"
+            name="name"
+            required
+            placeholder="예: Java17 실습환경"
+            style="
+                width:100%;
+                margin-bottom:18px;
+            "
+        >
+
+
+        <p
+            class="muted"
+            style="
+                font-size:12px;
+                font-weight:600;
+                margin-bottom:8px;
+            "
+        >
+            기반 이미지
+        </p>
+
+        <select
+            name="base_image_id"
+            required
+            style="
+                width:100%;
+                margin-bottom:20px;
+            "
+        >
+
+            {% for image in images %}
+
+            <option value="{{ image.id }}">
+                {{ image.name }}
+            </option>
+
+            {% empty %}
+
+            <option value="">
+                사용 가능한 이미지 없음
+            </option>
+
+            {% endfor %}
+
+        </select>
+
+
+        <div
+            class="row"
+            style="gap:10px"
+        >
+
+            <button
+                type="button"
+                id="cancel-create"
+                class="ghost"
+                style="flex:1"
+            >
+                취소
+            </button>
+
+            <button
+                type="submit"
+                class="primary"
+                style="flex:2"
+                {% if not images %}disabled{% endif %}
+            >
+                제작 환경 준비
+            </button>
+
+        </div>
+
+    </form>
+
+</dialog>
+
+
+<script>
+    const dlg =
+        document.getElementById(
+            "create-dialog"
+        );
+
+    const openBtn =
+        document.getElementById(
+            "open-create"
+        );
+
+    const closeBtn =
+        document.getElementById(
+            "close-create"
+        );
+
+    const cancelBtn =
+        document.getElementById(
+            "cancel-create"
+        );
+
+
+    if (openBtn && dlg) {
+        openBtn.addEventListener(
+            "click",
+            () => dlg.showModal()
+        );
+    }
+
+
+    if (closeBtn && dlg) {
+        closeBtn.addEventListener(
+            "click",
+            () => dlg.close()
+        );
+    }
+
+
+    if (cancelBtn && dlg) {
+        cancelBtn.addEventListener(
+            "click",
+            () => dlg.close()
+        );
+    }
+
+
+    {% if auto_refresh %}
+
+    window.setTimeout(
+        () => {
+            window.location.reload();
+        },
+        3000
+    );
+
+    {% endif %}
+</script>
+
+{% endblock %}
