@@ -25,7 +25,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     "portal",
     "provisioning",
-    "imagebuild",
 ]
 
 MIDDLEWARE = [
