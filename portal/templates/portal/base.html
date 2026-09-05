@@ -146,6 +146,37 @@
   border-top: 1px solid var(--line); padding-top: 8px;
   word-break: break-all;
 }
+.top-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  padding: 3px;
+  background: var(--muted-bg);
+  border-radius: 8px;
+}
+
+.top-nav-item {
+  padding: 6px 12px;
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  transition: background .15s, color .15s;
+}
+
+.top-nav-item:hover {
+  background: #fff;
+  color: var(--text);
+}
+
+.top-nav-item.active {
+  background: #fff;
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
 </style>
 </head>
 <body>
@@ -156,7 +187,19 @@
       <span style="font-family:Poppins,'Segoe UI',sans-serif;font-weight:600;font-size:16px;letter-spacing:.1em">SU PORTAL</span>
     </a>
     {% if user.is_authenticated %}
-    <span class="muted" style="font-size:12.5px">VM 관리</span>
+    {% if user.is_authenticated %}
+    <nav class="top-nav">
+      <a href="{% url 'portal:list' %}"
+        class="top-nav-item {% if request.resolver_match.app_name == 'portal' %}active{% endif %}">
+        VM 관리
+      </a>
+
+      <a href="{% url 'imagebuild:list' %}"
+        class="top-nav-item {% if request.resolver_match.app_name == 'imagebuild' %}active{% endif %}">
+        이미지 관리
+      </a>
+    </nav>
+    {% endif %}
     {% endif %}
   </div>
   <div class="row" style="gap:14px">
