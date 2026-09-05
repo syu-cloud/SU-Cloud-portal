@@ -387,9 +387,10 @@ def _create_server(
         key_name=keypair_name,
         security_groups=[
             {
-                "name": os.environ[
-                    "SU_SECGROUP"
-                ]
+                "name": (
+                    os.environ.get("SU_IMAGE_BUILD_SECGROUP")
+                    or os.environ["SU_SECGROUP"]
+                )
             }
         ],
         user_data=build_user_data(
