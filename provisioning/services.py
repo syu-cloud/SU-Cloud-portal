@@ -16,6 +16,36 @@ KEYFILE = os.environ.get("SU_KEYFILE", "/opt/su-portal/sdk-probe-key.pem")
 CLAIM_TIMEOUT = timedelta(minutes=10)
 
 
+# ── 조회 ──────────────────────────────────────────────
+
+def list_visible_vms():
+    """포털에 노출할 VM 목록을 조회한다."""
+    return list(
+        Vm.objects
+        .exclude(status=Vm.DELETED)
+        .exclude(failure__acknowledged_at__isnull=False)
+        .select_related("failure")
+        .order_by("slot_id")
+    )
+
+
+def slot_summary():
+    """현재 슬롯 사용 현황을 반환한다."""
+    taken = Slot.objects.filter(status=Slot.TAKEN).count()
+    free = Slot.objects.filter(status=Slot.FREE).count()
+
+    return {
+        "taken": taken,
+        "free": free,
+        "total": taken + free,
+    }
+
+
+def free_slot_count():
+    """현재 사용 가능한 슬롯 수를 반환한다."""
+    return Slot.objects.filter(status=Slot.FREE).count()
+
+
 # ── 요청 접수 ──────────────────────────────────────────────
 
 def reserve(student_id, image_id=None, image_name=""):
