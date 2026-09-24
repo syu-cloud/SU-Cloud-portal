@@ -1,7 +1,10 @@
-import os, openstack
+import os
+from pathlib import Path
+
+import openstack
 from dotenv import load_dotenv
 
-load_dotenv("/opt/su-portal/.env")
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 conn = openstack.connect(
     auth_url=os.environ["OS_AUTH_URL"],

@@ -12,8 +12,16 @@ from .models import Slot, Vm, VmFailure
 
 log = logging.getLogger(__name__)
 
-KEYFILE = os.environ.get("SU_KEYFILE", "/opt/su-portal/sdk-probe-key.pem")
 CLAIM_TIMEOUT = timedelta(minutes=10)
+
+
+def _require_infra_writes_enabled():
+    """현재 환경에서 실제 OpenStack/Warpgate 변경이 허용됐는지 확인한다."""
+    if os.environ.get("SU_INFRA_WRITES_ENABLED", "false").lower() != "true":
+        raise RuntimeError(
+            "Infrastructure writes are disabled in this environment "
+            "(SU_INFRA_WRITES_ENABLED=false)."
+        )
 
 
 # ── 조회 ──────────────────────────────────────────────
@@ -190,6 +198,7 @@ def claim(worker_id):
 
 def provision(vm_id):
     """VM 생성 + Warpgate 등록"""
+    _require_infra_writes_enabled()
     vm_rec = Vm.objects.get(pk=vm_id)
     conn = get_conn()
 
@@ -198,7 +207,13 @@ def provision(vm_id):
     if not adopted:
         try:
             image_id = str(vm_rec.image_id) if vm_rec.image_id else None
-            server = osvm.create(conn, vm_rec.slot_id, KEYFILE, image_id=image_id)
+            keyfile = os.environ["SU_KEYFILE"]
+            server = osvm.create(
+                conn,
+                vm_rec.slot_id,
+                keyfile,
+                image_id=image_id,
+            )
         except Exception as e:
             _mark_failed(conn, vm_rec, f"{type(e).__name__}: {e}")
             raise
@@ -236,6 +251,7 @@ def provision(vm_id):
 
 def deprovision(vm_id):
     """Warpgate 해제 + VM 삭제 · 슬롯 반납"""
+    _require_infra_writes_enabled()
     vm_rec = Vm.objects.get(pk=vm_id)
     if vm_rec.status == Vm.DELETED:
         return

@@ -16,6 +16,13 @@ class Command(BaseCommand):
         parser.add_argument("--interval", type=float, default=3.0)
 
     def handle(self, *args, **opts):
+        if os.environ.get("SU_WORKER_ENABLED", "false").lower() != "true":
+            self.stderr.write(
+                "Worker is disabled in this environment "
+                "(SU_WORKER_ENABLED=false)."
+            )
+            return
+
         worker_id = f"{socket.gethostname()}-{os.getpid()}"
         stopping = False
 

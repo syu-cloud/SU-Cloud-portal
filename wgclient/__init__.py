@@ -9,12 +9,14 @@
 경로가 다르면 이 파일의 상수만 고치면 됨.
 """
 import os
+from pathlib import Path
 import secrets
 
 import requests
 from dotenv import load_dotenv
 
-load_dotenv("/opt/su-portal/.env")
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
 
 class WarpgateError(RuntimeError):
