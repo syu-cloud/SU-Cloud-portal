@@ -7,9 +7,9 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 
-load_dotenv("/opt/su-portal/.env")
-
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+load_dotenv(BASE_DIR / ".env")
 
 # ── 환경변수 (없으면 부팅 실패가 정답 — 조용히 기본값으로 뜨는 것 방지)
 SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
