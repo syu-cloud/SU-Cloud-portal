@@ -100,3 +100,10 @@ def vm_list_view(request):
         )
 
     return Response(data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def image_list_view(request):
+    # VM 생성에 사용할 수 있는 Image 조회
+    return Response(api_services.list_images())

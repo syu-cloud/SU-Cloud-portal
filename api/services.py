@@ -1,5 +1,6 @@
 """REST API용 Application Service."""
 
+from catalog import services as catalog_service
 from osclient import vm as osvm
 from portal.labels import FAILED_DESCRIPTIONS
 from portal.services import friendly_label
@@ -117,3 +118,20 @@ def _serialize_vm(vm):
 def _iso_utc(value):
     """Contract의 UTC ISO 8601 형식으로 변환한다."""
     return value.isoformat().replace("+00:00", "Z")
+
+
+# ══ Image 조회 ═════════════════════════════════════════
+
+def list_images():
+    """Portal에서 사용할 수 있는 Image 목록을 API 형식으로 반환한다."""
+    images = catalog_service.list_portal_images()
+
+    return {
+        "items": [
+            {
+                "id": image["id"],
+                "name": image["name"],
+            }
+            for image in images
+        ],
+    }
