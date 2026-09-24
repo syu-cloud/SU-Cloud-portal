@@ -1,7 +1,7 @@
 """
 Django settings for config project.
-모든 환경 의존 값은 /opt/su-portal/.env 에서 읽음.
-개발계/운영계 전환 시 이 파일은 수정하지 않는다.
+환경 의존 값은 프로젝트 루트의 .env 에서 읽는다.
+환경별 차이는 .env 로 관리하며 settings.py 는 수정하지 않는다.
 """
 import os
 from dotenv import load_dotenv
