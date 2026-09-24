@@ -92,3 +92,7 @@ CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.environ.get("DJANGO_CSRF_TRUSTED_O
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 LOGIN_REDIRECT_URL = "portal:list"
+
+REST_FRAMEWORK = {
+    "EXCEPTION_HANDLER": "api.exceptions.api_exception_handler",
+}
