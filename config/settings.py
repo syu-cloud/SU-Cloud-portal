@@ -94,5 +94,13 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 LOGIN_REDIRECT_URL = "portal:list"
 
 REST_FRAMEWORK = {
+    # Phase 1 API 인증은 Django Session만 사용한다.
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework.authentication.SessionAuthentication",
+    ),
+    # /auth/session처럼 공개가 필요한 Endpoint만 AllowAny로 예외 처리한다.
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
     "EXCEPTION_HANDLER": "api.exceptions.api_exception_handler",
 }

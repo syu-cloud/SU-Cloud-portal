@@ -4,8 +4,10 @@ from django.middleware.csrf import get_token
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+
+from . import services as api_services
 
 
 @api_view(["GET", "POST", "DELETE"])
@@ -74,3 +76,27 @@ def session_view(request):
             "username": user.username,
         },
     })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def vm_list_view(request):
+    # 검색 · 상태 Filter
+    status_filter = request.query_params.get("status", "")
+    q = request.query_params.get("q", "").strip()
+
+    try:
+        data = api_services.list_vms(
+            status_filter=status_filter,
+            q=q,
+        )
+    except ValueError:
+        return Response(
+            {
+                "code": "VALIDATION_ERROR",
+                "message": "Unsupported status filter.",
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response(data)
