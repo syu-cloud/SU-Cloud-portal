@@ -4,6 +4,8 @@ from django.contrib.auth import views as auth_views
 from portal import views
 
 urlpatterns = [
+    path("api/v1/", include("api.urls")),
+
     path('admin/', admin.site.urls),
     path("", views.index, name="index"),
     path("portal/", include("portal.urls")),
