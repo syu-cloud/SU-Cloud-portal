@@ -135,3 +135,17 @@ def list_images():
             for image in images
         ],
     }
+
+
+# ══ Flavor 조회 ════════════════════════════════════════
+
+def list_flavors():
+    """현재 Portal에서 사용하는 고정 Flavor 정보를 반환한다."""
+    flavor = catalog_service.get_portal_flavor()
+
+    if flavor is None:
+        raise RuntimeError("configured flavor not found")
+
+    return {
+        "items": [flavor],
+    }

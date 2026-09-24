@@ -107,3 +107,10 @@ def vm_list_view(request):
 def image_list_view(request):
     # VM 생성에 사용할 수 있는 Image 조회
     return Response(api_services.list_images())
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def flavor_list_view(request):
+    # 현재 Portal에서 사용하는 고정 Flavor 조회
+    return Response(api_services.list_flavors())

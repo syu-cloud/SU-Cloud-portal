@@ -1,4 +1,7 @@
+import os
+
 from osclient import get_conn
+from osclient import flavor as osflavor
 from osclient import image as osimage
 
 
@@ -29,3 +32,11 @@ def get_portal_image(image_id):
         return None
 
     return image
+
+
+def get_portal_flavor():
+    """Portal에서 사용하는 고정 Flavor를 조회한다."""
+    conn = get_conn()
+    flavor_id = os.environ["SU_FLAVOR_ID"]
+
+    return osflavor.get(conn, flavor_id)
