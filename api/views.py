@@ -192,3 +192,109 @@ def image_list_view(request):
 def flavor_list_view(request):
     # 현재 Portal에서 사용하는 고정 Flavor 조회
     return Response(api_services.list_flavors())
+
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def vm_reclaim_view(request):
+    """선택 또는 전체 VM 회수 요청을 접수한다."""
+    if not isinstance(request.data, dict):
+        return Response(
+            {
+                "code": "VALIDATION_ERROR",
+                "message": "Request body must be a JSON object.",
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    scope = request.data.get("scope")
+
+    if scope not in ("selected", "all"):
+        return Response(
+            {
+                "code": "VALIDATION_ERROR",
+                "message": "scope must be selected or all.",
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if scope == "all":
+        if "vm_ids" in request.data:
+            return Response(
+                {
+                    "code": "VALIDATION_ERROR",
+                    "message": "vm_ids must not be provided for all scope.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        vm_ids = None
+
+    else:
+        vm_ids = request.data.get("vm_ids")
+
+        if not isinstance(vm_ids, list) or not vm_ids:
+            return Response(
+                {
+                    "code": "VALIDATION_ERROR",
+                    "message": "vm_ids must be a non-empty array.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if any(type(vm_id) is not int for vm_id in vm_ids):
+            return Response(
+                {
+                    "code": "VALIDATION_ERROR",
+                    "message": "vm_ids must contain integers.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(vm_ids) != len(set(vm_ids)):
+            return Response(
+                {
+                    "code": "VALIDATION_ERROR",
+                    "message": "vm_ids must not contain duplicates.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    data, active_accepted = api_services.reclaim_vms(
+        scope=scope,
+        vm_ids=vm_ids,
+    )
+
+    accepted = data["summary"]["accepted"]
+
+    # scope=all에서 대상 자체가 없으면 정상적인 no-op이다.
+    if scope == "all" and data["summary"]["requested"] == 0:
+        return Response(
+            data,
+            status=status.HTTP_200_OK,
+        )
+
+    # 하나도 처리할 수 없으면 공통 Error Schema + 건별 결과를 반환한다.
+    if accepted == 0:
+        return Response(
+            {
+                "code": "VM_NOT_RECLAIMABLE",
+                "message": "No requested VMs can be reclaimed.",
+                "details": data,
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    # 실제 삭제 작업이 필요한 ACTIVE가 하나라도 접수되면 비동기 202.
+    if active_accepted > 0:
+        return Response(
+            data,
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+    # FAILED+CLEANED acknowledge만 수행된 경우 즉시 완료이므로 200.
+    return Response(
+        data,
+        status=status.HTTP_200_OK,
+    )

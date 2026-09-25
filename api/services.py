@@ -64,6 +64,75 @@ def create_vms(count, image_id):
     }
 
 
+def reclaim_vms(scope, vm_ids=None):
+    """기존 provisioning 회수 로직을 호출하고 건별 처리 결과를 반환한다."""
+    if scope == "all":
+        vm_ids = []
+
+        for vm in prov.list_visible_vms():
+            if vm.status == Vm.ACTIVE:
+                vm_ids.append(vm.id)
+                continue
+
+            if vm.status == Vm.FAILED:
+                failure = getattr(vm, "failure", None)
+
+                if (
+                    failure is not None
+                    and failure.cleanup_status == VmFailure.CLEANED
+                ):
+                    vm_ids.append(vm.id)
+    else:
+        vm_ids = list(vm_ids or [])
+
+    results = []
+    accepted = 0
+    active_accepted = 0
+
+    for vm_id in vm_ids:
+        vm = Vm.objects.filter(pk=vm_id).first()
+
+        if vm is None:
+            results.append({
+                "vm_id": vm_id,
+                "accepted": False,
+                "code": "VM_NOT_FOUND",
+            })
+            continue
+
+        was_active = vm.status == Vm.ACTIVE
+        reclaimed = prov.request_reclaim(vm_id)
+
+        if reclaimed is None:
+            results.append({
+                "vm_id": vm_id,
+                "accepted": False,
+                "code": "VM_NOT_RECLAIMABLE",
+            })
+            continue
+
+        accepted += 1
+
+        if was_active:
+            active_accepted += 1
+
+        results.append({
+            "vm_id": vm_id,
+            "accepted": True,
+        })
+
+    payload = {
+        "summary": {
+            "requested": len(vm_ids),
+            "accepted": accepted,
+            "rejected": len(vm_ids) - accepted,
+        },
+        "results": results,
+    }
+
+    return payload, active_accepted
+
+
 def list_vms(status_filter="", q=""):
     """VM 목록과 검색·필터 적용 전 전체 현황을 반환한다."""
     if status_filter and status_filter not in VALID_VM_STATUSES:

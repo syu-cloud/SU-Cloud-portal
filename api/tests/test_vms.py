@@ -634,3 +634,377 @@ class VmCreateApiTests(APITestCase):
             response.json()["code"],
             "INSUFFICIENT_CAPACITY",
         )
+
+
+
+class VmReclaimApiTests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = "/api/v1/vms/reclaim-requests"
+
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username="vmreclaimtester",
+            password="test-password",
+        )
+
+        Slot.objects.bulk_create([
+            Slot(n=n, status=Slot.FREE)
+            for n in range(1, 46)
+        ])
+
+        self.active = self._create_vm(
+            slot_n=1,
+            status=Vm.ACTIVE,
+        )
+
+        self.provisioning = self._create_vm(
+            slot_n=2,
+            status=Vm.PROVISIONING,
+        )
+
+        self.failed_cleaned = self._create_vm(
+            slot_n=3,
+            status=Vm.FAILED,
+            slot_status=Slot.FREE,
+            error="ResourceTimeout: build timeout",
+        )
+        VmFailure.objects.create(
+            vm=self.failed_cleaned,
+            cleanup_status=VmFailure.CLEANED,
+        )
+
+        self.failed_cleanup_failed = self._create_vm(
+            slot_n=4,
+            status=Vm.FAILED,
+            error="Build failed",
+        )
+        VmFailure.objects.create(
+            vm=self.failed_cleanup_failed,
+            cleanup_status=VmFailure.CLEANUP_FAILED,
+        )
+
+    def _create_vm(
+        self,
+        slot_n,
+        status,
+        slot_status=Slot.TAKEN,
+        error="",
+    ):
+        slot = Slot.objects.get(pk=slot_n)
+        slot.status = slot_status
+        slot.save(update_fields=["status"])
+
+        return Vm.objects.create(
+            slot=slot,
+            status=status,
+            image_name="ubuntu-24.04",
+            error=error,
+        )
+
+    def _login(self):
+        self.client.force_login(self.user)
+
+    def test_reclaim_requires_authentication(self):
+        response = self.client.post(
+            self.url,
+            {
+                "scope": "selected",
+                "vm_ids": [self.active.id],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(
+            response.json()["code"],
+            "AUTHENTICATION_REQUIRED",
+        )
+
+    @patch("api.services.prov.request_reclaim")
+    def test_reclaim_requires_csrf(self, mock_request_reclaim):
+        csrf_client = APIClient(enforce_csrf_checks=True)
+        csrf_client.force_login(self.user)
+
+        response = csrf_client.post(
+            self.url,
+            {
+                "scope": "selected",
+                "vm_ids": [self.active.id],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.json(),
+            {
+                "code": "CSRF_FAILED",
+                "message": "CSRF validation failed.",
+            },
+        )
+        mock_request_reclaim.assert_not_called()
+
+    def test_reclaim_rejects_invalid_request(self):
+        self._login()
+
+        invalid_payloads = (
+            [],
+            {},
+            {"scope": "unsupported"},
+            {"scope": "selected"},
+            {"scope": "selected", "vm_ids": []},
+            {
+                "scope": "selected",
+                "vm_ids": [self.active.id, self.active.id],
+            },
+            {
+                "scope": "selected",
+                "vm_ids": ["1"],
+            },
+            {
+                "scope": "selected",
+                "vm_ids": [True],
+            },
+            {
+                "scope": "all",
+                "vm_ids": [self.active.id],
+            },
+        )
+
+        for payload in invalid_payloads:
+            with self.subTest(payload=payload):
+                response = self.client.post(
+                    self.url,
+                    payload,
+                    format="json",
+                )
+
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(
+                    response.json()["code"],
+                    "VALIDATION_ERROR",
+                )
+
+    def test_selected_reclaim_returns_per_vm_results(self):
+        self._login()
+
+        missing_id = 999999
+
+        response = self.client.post(
+            self.url,
+            {
+                "scope": "selected",
+                "vm_ids": [
+                    self.active.id,
+                    self.provisioning.id,
+                    missing_id,
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(
+            response.json(),
+            {
+                "summary": {
+                    "requested": 3,
+                    "accepted": 1,
+                    "rejected": 2,
+                },
+                "results": [
+                    {
+                        "vm_id": self.active.id,
+                        "accepted": True,
+                    },
+                    {
+                        "vm_id": self.provisioning.id,
+                        "accepted": False,
+                        "code": "VM_NOT_RECLAIMABLE",
+                    },
+                    {
+                        "vm_id": missing_id,
+                        "accepted": False,
+                        "code": "VM_NOT_FOUND",
+                    },
+                ],
+            },
+        )
+
+        self.active.refresh_from_db()
+        self.assertEqual(self.active.status, Vm.DELETING)
+
+    def test_failed_cleaned_reclaim_acknowledges_and_returns_200(self):
+        self._login()
+
+        response = self.client.post(
+            self.url,
+            {
+                "scope": "selected",
+                "vm_ids": [self.failed_cleaned.id],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["summary"],
+            {
+                "requested": 1,
+                "accepted": 1,
+                "rejected": 0,
+            },
+        )
+
+        failure = VmFailure.objects.get(
+            vm=self.failed_cleaned,
+        )
+        self.assertIsNotNone(failure.acknowledged_at)
+
+    def test_selected_reclaim_returns_409_when_all_rejected(self):
+        self._login()
+
+        response = self.client.post(
+            self.url,
+            {
+                "scope": "selected",
+                "vm_ids": [
+                    self.provisioning.id,
+                    self.failed_cleanup_failed.id,
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["code"],
+            "VM_NOT_RECLAIMABLE",
+        )
+
+        details = response.json()["details"]
+
+        self.assertEqual(
+            details["summary"],
+            {
+                "requested": 2,
+                "accepted": 0,
+                "rejected": 2,
+            },
+        )
+
+    def test_reclaim_all_processes_only_reclaimable_vms(self):
+        self._login()
+
+        response = self.client.post(
+            self.url,
+            {
+                "scope": "all",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 202)
+
+        data = response.json()
+
+        self.assertEqual(
+            data["summary"],
+            {
+                "requested": 2,
+                "accepted": 2,
+                "rejected": 0,
+            },
+        )
+
+        self.assertEqual(
+            [item["vm_id"] for item in data["results"]],
+            [
+                self.active.id,
+                self.failed_cleaned.id,
+            ],
+        )
+
+        self.active.refresh_from_db()
+        self.assertEqual(self.active.status, Vm.DELETING)
+
+        failure = VmFailure.objects.get(
+            vm=self.failed_cleaned,
+        )
+        self.assertIsNotNone(failure.acknowledged_at)
+
+        # 처리 대상이 아닌 상태는 그대로 유지한다.
+        self.provisioning.refresh_from_db()
+        self.failed_cleanup_failed.refresh_from_db()
+
+        self.assertEqual(
+            self.provisioning.status,
+            Vm.PROVISIONING,
+        )
+        self.assertEqual(
+            self.failed_cleanup_failed.status,
+            Vm.FAILED,
+        )
+
+    def test_reclaim_all_with_only_cleaned_failure_returns_200(self):
+        self._login()
+
+        self.active.status = Vm.DELETED
+        self.active.slot.status = Slot.FREE
+
+        self.active.slot.save(update_fields=["status"])
+        self.active.save(update_fields=["status"])
+
+        response = self.client.post(
+            self.url,
+            {
+                "scope": "all",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["summary"],
+            {
+                "requested": 1,
+                "accepted": 1,
+                "rejected": 0,
+            },
+        )
+
+    def test_reclaim_all_with_no_targets_returns_200(self):
+        self._login()
+
+        self.active.status = Vm.DELETED
+        self.active.slot.status = Slot.FREE
+        self.active.slot.save(update_fields=["status"])
+        self.active.save(update_fields=["status"])
+
+        failure = VmFailure.objects.get(
+            vm=self.failed_cleaned,
+        )
+        failure.acknowledged_at = timezone.now()
+        failure.save(update_fields=["acknowledged_at"])
+
+        response = self.client.post(
+            self.url,
+            {
+                "scope": "all",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "summary": {
+                    "requested": 0,
+                    "accepted": 0,
+                    "rejected": 0,
+                },
+                "results": [],
+            },
+        )
