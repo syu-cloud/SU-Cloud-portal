@@ -64,3 +64,32 @@ export function getVms(
 
   return apiRequest<VmListResponse>(path)
 }
+
+export type VmCreateRequest = {
+  count: number
+  image_id: string
+}
+
+export type VmCreateItem = {
+  id: number
+  slot_id: number
+  status: 'PROVISIONING'
+}
+
+export type VmCreateResponse = {
+  requested_count: number
+  accepted_count: number
+  items: VmCreateItem[]
+}
+
+export function createVms(
+  request: VmCreateRequest,
+): Promise<VmCreateResponse> {
+  return apiRequest<VmCreateResponse>(
+    '/api/v1/vms',
+    {
+      method: 'POST',
+      body: request,
+    },
+  )
+}
