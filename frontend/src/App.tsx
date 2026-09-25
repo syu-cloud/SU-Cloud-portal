@@ -6,6 +6,10 @@ import {
   logoutSession,
   type SessionResponse,
 } from './api/auth'
+import {
+  getVms,
+  type VmListResponse,
+} from './api/vms'
 
 function App() {
   const [session, setSession] = useState<SessionResponse | null>(null)
@@ -16,6 +20,12 @@ function App() {
   const [loginError, setLoginError] = useState<string | null>(null)
   const [loggingIn, setLoggingIn] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
+
+  const [vmData, setVmData] = useState<VmListResponse | null>(null)
+  const [vmError, setVmError] = useState<string | null>(null)
+
+  const authenticated = session?.authenticated === true
+  const loadingVms = authenticated && vmData === null && vmError === null
 
   useEffect(() => {
     let cancelled = false
@@ -40,6 +50,35 @@ function App() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (!authenticated) {
+      return
+    }
+
+    let cancelled = false
+
+    getVms()
+      .then((data) => {
+        if (!cancelled) {
+          setVmData(data)
+          setVmError(null)
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setVmError(
+            err instanceof Error
+              ? err.message
+              : 'Failed to load VM list.',
+          )
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [authenticated])
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -68,10 +107,14 @@ function App() {
 
     try {
       await logoutSession()
+
       setSession({
         authenticated: false,
         user: null,
       })
+
+      setVmData(null)
+      setVmError(null)
       setUsername('')
       setPassword('')
     } catch (err: unknown) {
@@ -117,6 +160,44 @@ function App() {
         >
           {loggingOut ? '로그아웃 중...' : '로그아웃'}
         </button>
+
+        <hr />
+
+        <h2>VM 현황</h2>
+
+        {loadingVms && <p>VM 목록 조회 중...</p>}
+
+        {vmError && (
+          <>
+            <p>VM 목록 조회에 실패했습니다.</p>
+            <p>{vmError}</p>
+          </>
+        )}
+
+        {vmData && (
+          <>
+            <p>
+              표시 VM: {vmData.summary.visible_total}대 /
+              {' '}슬롯 사용 {vmData.summary.slots.taken} /
+              {' '}여유 {vmData.summary.slots.free} /
+              {' '}전체 {vmData.summary.slots.total}
+            </p>
+
+            <ul>
+              {vmData.items.map((vm) => (
+                <li key={vm.id}>
+                  Slot {vm.slot_id} · {vm.name} · {vm.status}
+                  {' · '}
+                  {vm.fip ?? '-'}
+                  {' · '}
+                  {vm.user ?? '-'}
+                  {' · '}
+                  {vm.image_name ?? '-'}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </main>
     )
   }
