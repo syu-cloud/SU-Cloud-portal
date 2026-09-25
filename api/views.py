@@ -53,11 +53,28 @@ def session_view(request):
     username = request.data.get("username")
     password = request.data.get("password")
 
-    if not username or not password:
+    if (
+        username is None
+        or password is None
+        or username == ""
+        or password == ""
+    ):
         return Response(
             {
                 "code": "VALIDATION_ERROR",
                 "message": "username and password are required.",
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if (
+        not isinstance(username, str)
+        or not isinstance(password, str)
+    ):
+        return Response(
+            {
+                "code": "VALIDATION_ERROR",
+                "message": "username and password must be strings.",
             },
             status=status.HTTP_400_BAD_REQUEST,
         )

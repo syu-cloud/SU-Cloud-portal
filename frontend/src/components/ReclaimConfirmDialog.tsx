@@ -18,7 +18,7 @@ export function ReclaimConfirmDialog({
   const message = (
     mode === 'selected'
       ? `선택한 ${selectedCount}개를 회수합니다.`
-      : '전체 VM을 회수합니다.'
+      : '검색·필터와 관계없이 회수 가능한 전체 VM을 회수합니다.'
   )
 
   return (

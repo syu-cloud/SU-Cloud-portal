@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient, APITestCase
 
@@ -91,6 +93,50 @@ class SessionApiTests(APITestCase):
                 "message": "Request body must be a JSON object.",
             },
         )
+
+    @patch("api.views.authenticate")
+    def test_login_rejects_non_string_credentials(
+        self,
+        mock_authenticate,
+    ):
+        csrf = self._prepare_csrf()
+
+        invalid_payloads = (
+            {
+                "username": ["phase1test"],
+                "password": "test-password",
+            },
+            {
+                "username": "phase1test",
+                "password": {"value": "test-password"},
+            },
+            {
+                "username": 123,
+                "password": "test-password",
+            },
+        )
+
+        for payload in invalid_payloads:
+            with self.subTest(payload=payload):
+                response = self.client.post(
+                    self.url,
+                    payload,
+                    format="json",
+                    HTTP_X_CSRFTOKEN=csrf,
+                )
+
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(
+                    response.json(),
+                    {
+                        "code": "VALIDATION_ERROR",
+                        "message": (
+                            "username and password must be strings."
+                        ),
+                    },
+                )
+
+        mock_authenticate.assert_not_called()
 
     def test_login_with_missing_credentials_returns_400(self):
         csrf = self._prepare_csrf()
