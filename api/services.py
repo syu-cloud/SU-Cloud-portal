@@ -66,21 +66,11 @@ def create_vms(count, image_id):
 def reclaim_vms(scope, vm_ids=None):
     """기존 provisioning 회수 로직을 호출하고 건별 처리 결과를 반환한다."""
     if scope == "all":
-        vm_ids = []
-
-        for vm in prov.list_visible_vms():
-            if vm.status == Vm.ACTIVE:
-                vm_ids.append(vm.id)
-                continue
-
-            if vm.status == Vm.FAILED:
-                failure = getattr(vm, "failure", None)
-
-                if (
-                    failure is not None
-                    and failure.cleanup_status == VmFailure.CLEANED
-                ):
-                    vm_ids.append(vm.id)
+        vm_ids = [
+            vm.id
+            for vm in prov.list_visible_vms()
+            if _is_reclaimable(vm)
+        ]
     else:
         vm_ids = list(vm_ids or [])
 
@@ -168,6 +158,11 @@ def list_vms(status_filter="", q=""):
         "items": [_serialize_vm(vm) for vm in filtered_vms],
         "summary": {
             "visible_total": len(all_vms),
+            "reclaimable_total": sum(
+                1
+                for vm in all_vms
+                if _is_reclaimable(vm)
+            ),
             "status_counts": status_counts,
             "slots": prov.slot_summary(),
         },
@@ -186,6 +181,22 @@ def _matches_search(vm, q):
     )
 
 
+def _is_reclaimable(vm):
+    """현재 Portal 정책상 사용자가 회수 처리할 수 있는 VM인지 판단한다."""
+    if vm.status == Vm.ACTIVE:
+        return True
+
+    if vm.status != Vm.FAILED:
+        return False
+
+    failure = getattr(vm, "failure", None)
+
+    return (
+        failure is not None
+        and failure.cleanup_status == VmFailure.CLEANED
+    )
+
+
 def _serialize_vm(vm):
     """Vm 모델을 REST API Contract의 primitive JSON 구조로 변환한다."""
     fip = None
@@ -196,7 +207,7 @@ def _serialize_vm(vm):
         fip = osvm.fip_for(vm.slot_id)
         user = osvm.user_for(vm.slot_id)
 
-    can_reclaim = vm.status == Vm.ACTIVE
+    can_reclaim = _is_reclaimable(vm)
     failure_data = None
 
     if vm.status == Vm.FAILED:
@@ -214,8 +225,6 @@ def _serialize_vm(vm):
             "detail": vm.error or None,
             "cleanup_status": cleanup_status,
         }
-
-        can_reclaim = cleanup_status == VmFailure.CLEANED
 
     return {
         "id": vm.id,

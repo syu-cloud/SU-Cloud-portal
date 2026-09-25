@@ -150,6 +150,7 @@ class VmListApiTests(APITestCase):
             data["summary"],
             {
                 "visible_total": 5,
+                "reclaimable_total": 2,
                 "status_counts": {
                     "ACTIVE": 1,
                     "PROVISIONING": 1,

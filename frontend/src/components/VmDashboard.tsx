@@ -24,10 +24,14 @@ const VM_POLL_INTERVAL_MS = 5000
 
 type VmDashboardProps = {
   onUnauthorized: () => void
+  createDialogOpen: boolean
+  onCloseCreateDialog: () => void
 }
 
 export function VmDashboard({
   onUnauthorized,
+  createDialogOpen,
+  onCloseCreateDialog,
 }: VmDashboardProps) {
   const [vmData, setVmData] = useState<VmListResponse | null>(null)
   const [vmError, setVmError] = useState<string | null>(null)
@@ -48,8 +52,37 @@ export function VmDashboard({
   const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<VmStatus | ''>('')
+  const [refreshToken, setRefreshToken] = useState(0)
 
   const loading = vmData === null && vmError === null
+
+  useEffect(() => {
+    if (createResult === null) {
+      return
+    }
+
+    const timerId = window.setTimeout(() => {
+      setCreateResult(null)
+    }, 4000)
+
+    return () => {
+      window.clearTimeout(timerId)
+    }
+  }, [createResult])
+
+  useEffect(() => {
+    if (reclaimResult === null) {
+      return
+    }
+
+    const timerId = window.setTimeout(() => {
+      setReclaimResult(null)
+    }, 4000)
+
+    return () => {
+      window.clearTimeout(timerId)
+    }
+  }, [reclaimResult])
 
   useEffect(() => {
     let cancelled = false
@@ -150,7 +183,12 @@ export function VmDashboard({
         window.clearTimeout(timerId)
       }
     }
-  }, [onUnauthorized, searchQuery, statusFilter])
+  }, [
+    onUnauthorized,
+    searchQuery,
+    statusFilter,
+    refreshToken,
+  ])
 
   function handleSearch() {
     setSearchQuery(searchInput.trim())
@@ -171,6 +209,14 @@ export function VmDashboard({
       })
 
       setCreateResult(result)
+
+      // 기존 Portal의 생성 후 목록 redirect와 동일하게
+      // 검색/필터를 초기화하고 polling 계층에 즉시 재조회 신호를 보낸다.
+      setSearchInput('')
+      setSearchQuery('')
+      setStatusFilter('')
+      setRefreshToken((current) => current + 1)
+
       return true
     } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 401) {
@@ -201,6 +247,7 @@ export function VmDashboard({
       const result = await reclaimVms(request)
 
       setReclaimResult(result)
+      setRefreshToken((current) => current + 1)
       return true
     } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 401) {
@@ -220,21 +267,69 @@ export function VmDashboard({
     }
   }
 
+  const activeCount = vmData?.summary.status_counts.ACTIVE ?? 0
+  const provisioningCount = (
+    vmData?.summary.status_counts.PROVISIONING ?? 0
+  )
+  const failedCount = vmData?.summary.status_counts.FAILED ?? 0
+
+  const progressTotal = (
+    activeCount
+    + provisioningCount
+    + failedCount
+  )
+
   return (
     <>
-      <VmCreatePanel
-        images={images}
-        flavor={flavor}
-        freeSlots={vmData?.summary.slots.free ?? null}
-        loading={catalogLoading}
-        error={catalogError}
-        creating={creating}
-        createError={createError}
-        createResult={createResult}
-        onCreate={handleCreate}
-      />
+      {createResult && (
+        <div className="flash flash-success flash-auto-dismiss">
+          최근 생성 요청:
+          {' '}
+          요청 {createResult.requested_count}대 /
+          {' '}
+          접수 {createResult.accepted_count}대
+        </div>
+      )}
 
-      <hr />
+      {provisioningCount > 0 && progressTotal > 0 && (
+        <section className="progress-strip">
+          <div className="progress-strip-header">
+            <span className="live-label">
+              <span className="live-dot" />
+              생성 중
+            </span>
+
+            <span className="muted">
+              완료 {activeCount}
+              {' · '}
+              진행 {provisioningCount}
+              {' · '}
+              실패 {failedCount}
+            </span>
+          </div>
+
+          <div className="progress-bar">
+            <span
+              className="progress-active"
+              style={{
+                width: `${(activeCount / progressTotal) * 100}%`,
+              }}
+            />
+            <span
+              className="progress-running"
+              style={{
+                width: `${(provisioningCount / progressTotal) * 100}%`,
+              }}
+            />
+            <span
+              className="progress-failed"
+              style={{
+                width: `${(failedCount / progressTotal) * 100}%`,
+              }}
+            />
+          </div>
+        </section>
+      )}
 
       <VmList
         data={vmData}
@@ -249,6 +344,19 @@ export function VmDashboard({
         reclaimError={reclaimError}
         reclaimResult={reclaimResult}
         onReclaim={handleReclaim}
+      />
+
+      <VmCreatePanel
+        open={createDialogOpen}
+        onClose={onCloseCreateDialog}
+        images={images}
+        flavor={flavor}
+        slots={vmData?.summary.slots ?? null}
+        loading={catalogLoading}
+        error={catalogError}
+        creating={creating}
+        createError={createError}
+        onCreate={handleCreate}
       />
     </>
   )

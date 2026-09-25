@@ -7,6 +7,7 @@ import {
   type SessionResponse,
 } from './api/auth'
 import { LoginForm } from './components/LoginForm'
+import { PortalHeader } from './components/PortalHeader'
 import { VmDashboard } from './components/VmDashboard'
 
 function App() {
@@ -16,6 +17,8 @@ function App() {
   const [loginError, setLoginError] = useState<string | null>(null)
   const [loggingIn, setLoggingIn] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
+
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -69,6 +72,7 @@ function App() {
     try {
       await logoutSession()
 
+      setCreateDialogOpen(false)
       setSession({
         authenticated: false,
         user: null,
@@ -85,6 +89,7 @@ function App() {
   }
 
   const handleUnauthorized = useCallback(() => {
+    setCreateDialogOpen(false)
     setSession({
       authenticated: false,
       user: null,
@@ -93,56 +98,66 @@ function App() {
 
   if (sessionError) {
     return (
-      <main>
-        <h1>SU Cloud Portal</h1>
-        <p>세션 처리에 실패했습니다.</p>
-        <p>{sessionError}</p>
-      </main>
+      <div className="app-shell">
+        <PortalHeader />
+
+        <main className="page">
+          <div className="card status-card">
+            <h1>세션 처리에 실패했습니다.</h1>
+            <p className="error-text">{sessionError}</p>
+          </div>
+        </main>
+      </div>
     )
   }
 
   if (!session) {
     return (
-      <main>
-        <h1>SU Cloud Portal</h1>
-        <p>세션 확인 중...</p>
-      </main>
+      <div className="app-shell">
+        <PortalHeader />
+
+        <main className="page">
+          <div className="card status-card">
+            <p className="muted">세션 확인 중...</p>
+          </div>
+        </main>
+      </div>
     )
   }
 
   if (session.authenticated && session.user) {
     return (
-      <main>
-        <h1>SU Cloud Portal</h1>
-        <p>{session.user.username} 로그인 상태</p>
-
-        <button
-          type="button"
-          onClick={handleLogout}
-          disabled={loggingOut}
-        >
-          {loggingOut ? '로그아웃 중...' : '로그아웃'}
-        </button>
-
-        <hr />
-
-        <VmDashboard
-          onUnauthorized={handleUnauthorized}
+      <div className="app-shell">
+        <PortalHeader
+          username={session.user.username}
+          loggingOut={loggingOut}
+          onLogout={handleLogout}
+          onOpenCreate={() => setCreateDialogOpen(true)}
         />
-      </main>
+
+        <main className="page">
+          <VmDashboard
+            onUnauthorized={handleUnauthorized}
+            createDialogOpen={createDialogOpen}
+            onCloseCreateDialog={() => setCreateDialogOpen(false)}
+          />
+        </main>
+      </div>
     )
   }
 
   return (
-    <main>
-      <h1>SU Cloud Portal</h1>
+    <div className="app-shell">
+      <PortalHeader />
 
-      <LoginForm
-        error={loginError}
-        submitting={loggingIn}
-        onSubmit={handleLogin}
-      />
-    </main>
+      <main className="page login-page">
+        <LoginForm
+          error={loginError}
+          submitting={loggingIn}
+          onSubmit={handleLogin}
+        />
+      </main>
+    </div>
   )
 }
 

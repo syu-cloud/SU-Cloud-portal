@@ -30,6 +30,7 @@ export type VmListResponse = {
   items: VmItem[]
   summary: {
     visible_total: number
+    reclaimable_total: number
     status_counts: Record<VmStatus, number>
     slots: {
       taken: number

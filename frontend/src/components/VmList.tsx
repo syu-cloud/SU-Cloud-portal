@@ -4,11 +4,13 @@ import {
 } from 'react'
 
 import {
+  type VmItem,
   type VmListResponse,
   type VmReclaimRequest,
   type VmReclaimResponse,
   type VmStatus,
 } from '../api/vms'
+import { ReclaimConfirmDialog } from './ReclaimConfirmDialog'
 
 type VmListProps = {
   data: VmListResponse | null
@@ -27,6 +29,65 @@ type VmListProps = {
   ) => Promise<boolean>
 }
 
+function formatCreatedAt(value: string) {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+
+  return `${year}-${month}-${day} ${hour}:${minute}`
+}
+
+function StatusBadge({ vm }: { vm: VmItem }) {
+  if (vm.status !== 'FAILED' || !vm.failure) {
+    return (
+      <span
+        className={
+          `badge badge-${vm.status.toLowerCase()}`
+        }
+      >
+        {vm.status}
+      </span>
+    )
+  }
+
+  return (
+    <span
+      className="badge badge-failed fail-hover"
+      tabIndex={0}
+    >
+      FAILED
+
+      <span className="failure-popover">
+        <strong>{vm.failure.label}</strong>
+
+        <span>
+          {vm.failure.description}
+        </span>
+
+        <span className="failure-cleanup">
+          cleanup:
+          {' '}
+          {vm.failure.cleanup_status ?? 'PENDING'}
+        </span>
+
+        {vm.failure.detail && (
+          <span className="failure-raw">
+            {vm.failure.detail}
+          </span>
+        )}
+      </span>
+    </span>
+  )
+}
+
 export function VmList({
   data,
   error,
@@ -42,6 +103,9 @@ export function VmList({
   onReclaim,
 }: VmListProps) {
   const [selectedVmIds, setSelectedVmIds] = useState<number[]>([])
+  const [reclaimConfirm, setReclaimConfirm] = useState<
+    VmReclaimRequest | null
+  >(null)
 
   const reclaimableItems = (
     data?.items.filter((vm) => vm.can_reclaim) ?? []
@@ -57,6 +121,11 @@ export function VmList({
     onSearch()
   }
 
+  function changeStatus(value: VmStatus | '') {
+    setSelectedVmIds([])
+    onStatusFilterChange(value)
+  }
+
   function toggleVm(vmId: number) {
     setSelectedVmIds((current) => (
       current.includes(vmId)
@@ -65,118 +134,195 @@ export function VmList({
     ))
   }
 
-  async function handleSelectedReclaim() {
+  function handleSelectedReclaim() {
     if (currentSelectedIds.length === 0 || reclaiming) {
       return
     }
 
-    if (
-      !window.confirm(
-        `선택한 ${currentSelectedIds.length}건을 회수 처리하시겠습니까?`,
-      )
-    ) {
-      return
-    }
-
-    const succeeded = await onReclaim({
+    setReclaimConfirm({
       scope: 'selected',
-      vm_ids: currentSelectedIds,
+      vm_ids: [...currentSelectedIds],
     })
-
-    if (succeeded) {
-      setSelectedVmIds([])
-    }
   }
 
-  async function handleAllReclaim() {
+  function handleAllReclaim() {
     if (
       data === null
-      || data.summary.visible_total === 0
+      || data.summary.reclaimable_total === 0
       || reclaiming
     ) {
       return
     }
 
-    if (
-      !window.confirm(
-        '검색·필터와 관계없이 현재 회수 가능한 VM 전체를 회수 처리하시겠습니까?',
-      )
-    ) {
+    setReclaimConfirm({
+      scope: 'all',
+    })
+  }
+
+  async function handleConfirmedReclaim() {
+    if (reclaimConfirm === null || reclaiming) {
       return
     }
 
-    const succeeded = await onReclaim({
-      scope: 'all',
-    })
+    const request = reclaimConfirm
+    const succeeded = await onReclaim(request)
 
-    if (succeeded) {
+    if (succeeded && request.scope === 'selected') {
       setSelectedVmIds([])
     }
+
+    setReclaimConfirm(null)
+  }
+
+  if (loading) {
+    return (
+      <div className="card loading-card">
+        VM 목록 조회 중...
+      </div>
+    )
+  }
+
+  if (error && !data) {
+    return (
+      <div
+        className="flash flash-error"
+        role="alert"
+      >
+        <strong>VM 목록 조회에 실패했습니다.</strong>
+        <span>{error}</span>
+      </div>
+    )
+  }
+
+  if (data && data.summary.visible_total === 0) {
+    return (
+      <>
+        {error && (
+          <div
+            className="flash flash-error"
+            role="alert"
+          >
+            {error}
+          </div>
+        )}
+
+        <div className="card empty-card">
+          <div className="empty-icon">VM</div>
+          <h2>아직 생성된 VM이 없어요</h2>
+          <p>
+            우측 상단의 VM 생성 버튼에서 새 VM을 생성할 수 있습니다.
+          </p>
+        </div>
+      </>
+    )
   }
 
   return (
     <>
-      <h2>VM 현황</h2>
+      <section className="card control-card">
+        <div className="control-top">
+          <div className="status-chips">
+            <button
+              className={`chip ${statusFilter === '' ? 'active' : ''}`}
+              type="button"
+              onClick={() => changeStatus('')}
+            >
+              전체
+              <strong>{data?.summary.visible_total ?? 0}</strong>
+            </button>
 
-      <form onSubmit={handleSearch}>
-        <label htmlFor="vm-search">검색</label>
-        <input
-          id="vm-search"
-          type="search"
-          placeholder="이름, FIP, 계정, Slot"
-          value={searchInput}
-          onChange={(event) => onSearchInputChange(event.target.value)}
-        />
-        <button type="submit">조회</button>
-      </form>
+            <button
+              className={`chip ${statusFilter === 'ACTIVE' ? 'active' : ''}`}
+              type="button"
+              onClick={() => changeStatus('ACTIVE')}
+            >
+              ACTIVE
+              <strong>{data?.summary.status_counts.ACTIVE ?? 0}</strong>
+            </button>
 
-      <div>
-        <label htmlFor="vm-status">상태</label>
-        <select
-          id="vm-status"
-          value={statusFilter}
-          onChange={(event) => {
-            setSelectedVmIds([])
-            onStatusFilterChange(
-              event.target.value as VmStatus | '',
-            )
-          }}
+            <button
+              className={`chip ${statusFilter === 'PROVISIONING' ? 'active' : ''}`}
+              type="button"
+              onClick={() => changeStatus('PROVISIONING')}
+            >
+              PROVISIONING
+              <strong>{data?.summary.status_counts.PROVISIONING ?? 0}</strong>
+            </button>
+
+            <button
+              className={`chip ${statusFilter === 'DELETING' ? 'active' : ''}`}
+              type="button"
+              onClick={() => changeStatus('DELETING')}
+            >
+              DELETING
+              <strong>{data?.summary.status_counts.DELETING ?? 0}</strong>
+            </button>
+
+            <button
+              className={`chip ${statusFilter === 'FAILED' ? 'active' : ''}`}
+              type="button"
+              onClick={() => changeStatus('FAILED')}
+            >
+              FAILED
+              <strong>{data?.summary.status_counts.FAILED ?? 0}</strong>
+            </button>
+          </div>
+
+          <div className="control-actions">
+            <span className="slot-summary">
+              여유 슬롯
+              {' '}
+              {data?.summary.slots.free ?? 0}
+              {' / '}
+              {data?.summary.slots.total ?? 0}
+            </span>
+
+            <button
+              className="button button-ghost button-danger"
+              type="button"
+              disabled={
+                data === null
+                || data.summary.reclaimable_total === 0
+                || reclaiming
+              }
+              onClick={handleAllReclaim}
+            >
+              {reclaiming ? '처리 중...' : '전체 회수'}
+            </button>
+          </div>
+        </div>
+
+        <form
+          className="search-row"
+          onSubmit={handleSearch}
         >
-          <option value="">전체</option>
-          <option value="ACTIVE">ACTIVE</option>
-          <option value="PROVISIONING">PROVISIONING</option>
-          <option value="DELETING">DELETING</option>
-          <option value="FAILED">FAILED</option>
-        </select>
-      </div>
+          <input
+            className="input"
+            id="vm-search"
+            type="search"
+            aria-label="VM 검색"
+            placeholder="이름 / FIP / 계정 / 슬롯 번호 검색"
+            value={searchInput}
+            onChange={(event) => onSearchInputChange(event.target.value)}
+          />
 
-      <div>
-        <button
-          type="button"
-          disabled={
-            currentSelectedIds.length === 0
-            || reclaiming
-          }
-          onClick={() => void handleSelectedReclaim()}
-        >
-          {reclaiming ? '처리 중...' : '선택 회수'}
-        </button>
-
-        <button
-          type="button"
-          disabled={
-            data === null
-            || data.summary.visible_total === 0
-            || reclaiming
-          }
-          onClick={() => void handleAllReclaim()}
-        >
-          {reclaiming ? '처리 중...' : '전체 회수'}
-        </button>
-      </div>
+          <button
+            className="button button-ghost"
+            type="submit"
+          >
+            검색
+          </button>
+        </form>
+      </section>
 
       {reclaimResult && (
-        <p>
+        <div
+          className={
+            reclaimResult.summary.rejected > 0
+              ? 'flash flash-warning flash-auto-dismiss'
+              : 'flash flash-success flash-auto-dismiss'
+          }
+        >
           최근 회수 요청:
           {' '}
           요청 {reclaimResult.summary.requested}건 /
@@ -184,67 +330,145 @@ export function VmList({
           처리 {reclaimResult.summary.accepted}건 /
           {' '}
           거절 {reclaimResult.summary.rejected}건
-        </p>
+        </div>
       )}
 
       {reclaimError && (
-        <>
-          <p>VM 회수 요청에 실패했습니다.</p>
-          <p>{reclaimError}</p>
-        </>
+        <div
+          className="flash flash-error"
+          role="alert"
+        >
+          <strong>VM 회수 요청에 실패했습니다.</strong>
+          <span>{reclaimError}</span>
+        </div>
       )}
-
-      {loading && <p>VM 목록 조회 중...</p>}
 
       {error && (
-        <>
-          <p>VM 목록 조회에 실패했습니다.</p>
-          <p>{error}</p>
-        </>
+        <div
+          className="flash flash-error"
+          role="alert"
+        >
+          <strong>VM 목록 갱신에 실패했습니다.</strong>
+          <span>{error}</span>
+        </div>
       )}
 
-      {data && (
-        <>
-          <p>
-            전체 관리 VM: {data.summary.visible_total}대 /
-            {' '}현재 조회 결과: {data.items.length}대 /
-            {' '}슬롯 사용 {data.summary.slots.taken} /
-            {' '}여유 {data.summary.slots.free} /
-            {' '}전체 {data.summary.slots.total}
-          </p>
+      <section className="card table-card">
+        <div className="table-wrap">
+          <table className="vm-table">
+            <thead>
+              <tr>
+                <th className="checkbox-column">
+                  <span className="sr-only">선택</span>
+                </th>
+                <th>슬롯</th>
+                <th>이름</th>
+                <th>이미지</th>
+                <th>FIP</th>
+                <th>계정</th>
+                <th>상태</th>
+                <th>생성일</th>
+              </tr>
+            </thead>
 
-          <ul>
-            {data.items.map((vm) => (
-              <li key={vm.id}>
-                <input
-                  type="checkbox"
-                  aria-label={`Slot ${vm.slot_id} 선택`}
-                  checked={currentSelectedIds.includes(vm.id)}
-                  disabled={!vm.can_reclaim || reclaiming}
-                  onChange={() => toggleVm(vm.id)}
-                />
+            <tbody>
+              {data?.items.map((vm) => (
+                <tr key={vm.id}>
+                  <td className="checkbox-column">
+                    <input
+                      type="checkbox"
+                      aria-label={`Slot ${vm.slot_id} 선택`}
+                      checked={currentSelectedIds.includes(vm.id)}
+                      disabled={!vm.can_reclaim || reclaiming}
+                      onChange={() => toggleVm(vm.id)}
+                    />
+                  </td>
 
-                {' '}
-                Slot {vm.slot_id} · {vm.name} · {vm.status}
-                {' · '}
-                {vm.fip ?? '-'}
-                {' · '}
-                {vm.user ?? '-'}
-                {' · '}
-                {vm.image_name ?? '-'}
+                  <td>
+                    {String(vm.slot_id).padStart(2, '0')}
+                  </td>
 
-                {vm.failure && (
-                  <>
-                    {' · '}
-                    {vm.failure.label}
-                    {' · cleanup='}
-                    {vm.failure.cleanup_status ?? 'PENDING'}
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        </>
+                  <td>{vm.name}</td>
+
+                  <td className="muted">
+                    {vm.image_name ?? '—'}
+                  </td>
+
+                  <td>{vm.fip ?? '—'}</td>
+
+                  <td className="muted">
+                    {vm.user ?? '—'}
+                  </td>
+
+                  <td className="status-cell">
+                    <StatusBadge vm={vm} />
+                  </td>
+
+                  <td className="muted created-at">
+                    {vm.status === 'PROVISIONING'
+                      ? '—'
+                      : formatCreatedAt(vm.created_at)}
+                  </td>
+                </tr>
+              ))}
+
+              {data && data.items.length === 0 && (
+                <tr>
+                  <td
+                    className="no-results"
+                    colSpan={8}
+                  >
+                    조건에 맞는 VM이 없습니다.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {currentSelectedIds.length > 0 && (
+        <div className="sticky-bar">
+          <div className="sticky-bar-inner">
+            <span>
+              {currentSelectedIds.length}개 선택됨
+            </span>
+
+            <div className="sticky-actions">
+              <button
+                className="button button-ghost"
+                type="button"
+                onClick={() => setSelectedVmIds([])}
+                disabled={reclaiming}
+              >
+                선택 취소
+              </button>
+
+              <button
+                className="button button-primary"
+                type="button"
+                onClick={handleSelectedReclaim}
+                disabled={reclaiming}
+              >
+                {reclaiming ? '처리 중...' : '선택 회수'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reclaimConfirm && (
+        <ReclaimConfirmDialog
+          mode={reclaimConfirm.scope}
+          selectedCount={
+            reclaimConfirm.scope === 'selected'
+              ? reclaimConfirm.vm_ids.length
+              : 0
+          }
+          submitting={reclaiming}
+          onCancel={() => setReclaimConfirm(null)}
+          onConfirm={() => void handleConfirmedReclaim()}
+        />
       )}
     </>
   )
