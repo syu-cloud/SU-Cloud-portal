@@ -39,6 +39,28 @@ export type VmListResponse = {
   }
 }
 
-export function getVms(): Promise<VmListResponse> {
-  return apiRequest<VmListResponse>('/api/v1/vms')
+export type VmListParams = {
+  q?: string
+  status?: VmStatus
+}
+
+export function getVms(
+  params: VmListParams = {},
+): Promise<VmListResponse> {
+  const query = new URLSearchParams()
+
+  if (params.q) {
+    query.set('q', params.q)
+  }
+
+  if (params.status) {
+    query.set('status', params.status)
+  }
+
+  const queryString = query.toString()
+  const path = queryString
+    ? `/api/v1/vms?${queryString}`
+    : '/api/v1/vms'
+
+  return apiRequest<VmListResponse>(path)
 }
