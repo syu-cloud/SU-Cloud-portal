@@ -41,6 +41,15 @@ def session_view(request):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     # 로그인 요청 값 검증
+    if not isinstance(request.data, dict):
+        return Response(
+            {
+                "code": "VALIDATION_ERROR",
+                "message": "Request body must be a JSON object.",
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     username = request.data.get("username")
     password = request.data.get("password")
 

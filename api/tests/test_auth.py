@@ -73,6 +73,25 @@ class SessionApiTests(APITestCase):
             },
         )
 
+    def test_login_rejects_non_object_json(self):
+        csrf = self._prepare_csrf()
+
+        response = self.client.post(
+            self.url,
+            [],
+            format="json",
+            HTTP_X_CSRFTOKEN=csrf,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {
+                "code": "VALIDATION_ERROR",
+                "message": "Request body must be a JSON object.",
+            },
+        )
+
     def test_login_with_missing_credentials_returns_400(self):
         csrf = self._prepare_csrf()
 
