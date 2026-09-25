@@ -11,6 +11,8 @@ import { PortalHeader } from './components/PortalHeader'
 import { VmDashboard } from './components/VmDashboard'
 
 function App() {
+  // ── 세션 · 화면 상태 ──────────────────────────────────────
+
   const [session, setSession] = useState<SessionResponse | null>(null)
   const [sessionError, setSessionError] = useState<string | null>(null)
 
@@ -19,6 +21,8 @@ function App() {
   const [loggingOut, setLoggingOut] = useState(false)
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+
+  // ── 초기 세션 확인 ────────────────────────────────────────
 
   useEffect(() => {
     let cancelled = false
@@ -43,6 +47,8 @@ function App() {
       cancelled = true
     }
   }, [])
+
+  // ── 인증 동작 ────────────────────────────────────────────
 
   async function handleLogin(
     username: string,

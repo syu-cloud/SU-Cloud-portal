@@ -19,6 +19,7 @@ import {
 } from '../api/vms'
 import { VmCreatePanel } from './VmCreatePanel'
 import { VmList } from './VmList'
+import { VmProgressStrip } from './VmProgressStrip'
 
 const VM_POLL_INTERVAL_MS = 5000
 
@@ -33,6 +34,8 @@ export function VmDashboard({
   createDialogOpen,
   onCloseCreateDialog,
 }: VmDashboardProps) {
+  // ── 화면 · 요청 상태 ──────────────────────────────────────
+
   const [vmData, setVmData] = useState<VmListResponse | null>(null)
   const [vmError, setVmError] = useState<string | null>(null)
 
@@ -55,6 +58,8 @@ export function VmDashboard({
   const [refreshToken, setRefreshToken] = useState(0)
 
   const loading = vmData === null && vmError === null
+
+  // ── 성공 알림 자동 해제 ──────────────────────────────────
 
   useEffect(() => {
     if (createResult === null) {
@@ -83,6 +88,8 @@ export function VmDashboard({
       window.clearTimeout(timerId)
     }
   }, [reclaimResult])
+
+  // ── 생성 옵션 조회 ───────────────────────────────────────
 
   useEffect(() => {
     let cancelled = false
@@ -129,6 +136,8 @@ export function VmDashboard({
       cancelled = true
     }
   }, [onUnauthorized])
+
+  // ── VM 목록 Polling ──────────────────────────────────────
 
   useEffect(() => {
     let cancelled = false
@@ -189,6 +198,8 @@ export function VmDashboard({
     statusFilter,
     refreshToken,
   ])
+
+  // ── 사용자 요청 처리 ─────────────────────────────────────
 
   function handleSearch() {
     setSearchQuery(searchInput.trim())
@@ -267,18 +278,6 @@ export function VmDashboard({
     }
   }
 
-  const activeCount = vmData?.summary.status_counts.ACTIVE ?? 0
-  const provisioningCount = (
-    vmData?.summary.status_counts.PROVISIONING ?? 0
-  )
-  const failedCount = vmData?.summary.status_counts.FAILED ?? 0
-
-  const progressTotal = (
-    activeCount
-    + provisioningCount
-    + failedCount
-  )
-
   return (
     <>
       {createResult && (
@@ -291,45 +290,17 @@ export function VmDashboard({
         </div>
       )}
 
-      {provisioningCount > 0 && progressTotal > 0 && (
-        <section className="progress-strip">
-          <div className="progress-strip-header">
-            <span className="live-label">
-              <span className="live-dot" />
-              생성 중
-            </span>
-
-            <span className="muted">
-              완료 {activeCount}
-              {' · '}
-              진행 {provisioningCount}
-              {' · '}
-              실패 {failedCount}
-            </span>
-          </div>
-
-          <div className="progress-bar">
-            <span
-              className="progress-active"
-              style={{
-                width: `${(activeCount / progressTotal) * 100}%`,
-              }}
-            />
-            <span
-              className="progress-running"
-              style={{
-                width: `${(provisioningCount / progressTotal) * 100}%`,
-              }}
-            />
-            <span
-              className="progress-failed"
-              style={{
-                width: `${(failedCount / progressTotal) * 100}%`,
-              }}
-            />
-          </div>
-        </section>
-      )}
+      <VmProgressStrip
+        activeCount={
+          vmData?.summary.status_counts.ACTIVE ?? 0
+        }
+        provisioningCount={
+          vmData?.summary.status_counts.PROVISIONING ?? 0
+        }
+        failedCount={
+          vmData?.summary.status_counts.FAILED ?? 0
+        }
+      />
 
       <VmList
         data={vmData}

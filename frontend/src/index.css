@@ -1,3 +1,5 @@
+/* ── Base / Design Tokens ─────────────────────────────── */
+
 :root {
   font-family:
     "Segoe UI",
@@ -58,6 +60,8 @@ select {
 button {
   color: inherit;
 }
+
+/* ── App Layout / Header ─────────────────────────────── */
 
 .app-shell {
   min-height: 100vh;
@@ -153,6 +157,8 @@ button {
   margin: 24px auto 0;
   padding-bottom: 72px;
 }
+
+/* ── Login / Common Form ─────────────────────────────── */
 
 .login-page {
   display: flex;
@@ -272,6 +278,8 @@ button {
   background: var(--err-bg);
 }
 
+/* ── VM Controls / Search ────────────────────────────── */
+
 .control-card {
   padding-top: 18px;
   padding-bottom: 18px;
@@ -336,6 +344,8 @@ button {
 .search-row .input {
   flex: 1;
 }
+
+/* ── VM Table / Status ───────────────────────────────── */
 
 .table-card {
   padding-top: 20px;
@@ -490,6 +500,8 @@ button {
   line-height: 1.5;
 }
 
+/* ── Empty / Feedback ────────────────────────────────── */
+
 .loading-card {
   color: var(--muted);
   text-align: center;
@@ -555,6 +567,24 @@ button {
   background: #eaf2fb;
   color: var(--accent);
 }
+
+/* 성공 결과는 4초 동안 표시한 뒤 서서히 사라진다. */
+.flash-auto-dismiss {
+  animation: flash-fade-out 4s ease forwards;
+}
+
+@keyframes flash-fade-out {
+  0%,
+  82% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ── Provisioning Progress ───────────────────────────── */
 
 .progress-strip {
   margin-bottom: 16px;
@@ -636,6 +666,8 @@ button {
   }
 }
 
+/* ── Selection Bar ───────────────────────────────────── */
+
 .sticky-bar {
   position: fixed;
   right: 0;
@@ -662,6 +694,8 @@ button {
   display: flex;
   gap: 8px;
 }
+
+/* ── Modal / VM Creation ─────────────────────────────── */
 
 .modal-backdrop {
   position: fixed;
@@ -708,6 +742,37 @@ button {
 .modal-close:disabled {
   cursor: not-allowed;
   opacity: 0.4;
+}
+
+/* 회수 확인 Modal */
+.reclaim-modal {
+  width: min(380px, 100%);
+}
+
+.reclaim-message {
+  padding: 4px 0 2px;
+}
+
+.reclaim-message p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.reclaim-message p + p {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.button-danger-primary {
+  border-color: var(--err);
+  background: var(--err);
+  color: #fff;
+}
+
+.button-danger-primary:hover:not(:disabled) {
+  border-color: #b93737;
+  background: #b93737;
 }
 
 .section-label {
@@ -879,6 +944,8 @@ button {
   border: 0;
 }
 
+/* ── Responsive ──────────────────────────────────────── */
+
 @media (max-width: 840px) {
   .topbar-inner {
     padding: 0 16px;
@@ -952,50 +1019,7 @@ button {
   }
 }
 
-.reclaim-modal {
-  width: min(380px, 100%);
-}
-
-.reclaim-message {
-  padding: 4px 0 2px;
-}
-
-.reclaim-message p {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.65;
-}
-
-.reclaim-message p + p {
-  margin-top: 4px;
-  color: var(--muted);
-}
-
-.button-danger-primary {
-  border-color: var(--err);
-  background: var(--err);
-  color: #fff;
-}
-
-.button-danger-primary:hover:not(:disabled) {
-  border-color: #b93737;
-  background: #b93737;
-}
-
-.flash-auto-dismiss {
-  animation: flash-fade-out 4s ease forwards;
-}
-
-@keyframes flash-fade-out {
-  0%,
-  82% {
-    opacity: 1;
-  }
-
-  100% {
-    opacity: 0;
-  }
-}
+/* ── Motion Accessibility ────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
   .flash-auto-dismiss {

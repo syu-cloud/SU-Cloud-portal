@@ -1,5 +1,7 @@
 import { apiRequest } from './client'
 
+// ── VM 조회 ────────────────────────────────────────────────
+
 export type VmStatus =
   | 'ACTIVE'
   | 'PROVISIONING'
@@ -26,17 +28,19 @@ export type VmItem = {
   failure: VmFailure | null
 }
 
+export type VmSlotSummary = {
+  taken: number
+  free: number
+  total: number
+}
+
 export type VmListResponse = {
   items: VmItem[]
   summary: {
     visible_total: number
     reclaimable_total: number
     status_counts: Record<VmStatus, number>
-    slots: {
-      taken: number
-      free: number
-      total: number
-    }
+    slots: VmSlotSummary
   }
 }
 
@@ -66,6 +70,8 @@ export function getVms(
   return apiRequest<VmListResponse>(path)
 }
 
+// ── VM 생성 ────────────────────────────────────────────────
+
 export type VmCreateRequest = {
   count: number
   image_id: string
@@ -94,6 +100,8 @@ export function createVms(
     },
   )
 }
+
+// ── VM 회수 ────────────────────────────────────────────────
 
 export type VmReclaimRequest =
   | {

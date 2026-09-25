@@ -7,13 +7,8 @@ import {
   type FlavorItem,
   type ImageItem,
 } from '../api/catalog'
+import { type VmSlotSummary } from '../api/vms'
 import { ModalDialog } from './ModalDialog'
-
-type SlotSummary = {
-  taken: number
-  free: number
-  total: number
-}
 
 // 기존 Portal UI와 표시를 맞추기 위한 임시 값.
 // TODO: REST API contract에 security group 정보가 추가되면 응답값으로 교체한다.
@@ -24,7 +19,7 @@ type VmCreatePanelProps = {
   onClose: () => void
   images: ImageItem[]
   flavor: FlavorItem | null
-  slots: SlotSummary | null
+  slots: VmSlotSummary | null
   loading: boolean
   error: string | null
   creating: boolean
@@ -55,9 +50,13 @@ export function VmCreatePanel({
   createError,
   onCreate,
 }: VmCreatePanelProps) {
+  // ── 입력 상태 ─────────────────────────────────────────────
+
   const [selectedImageId, setSelectedImageId] = useState('')
   const [countInput, setCountInput] = useState('1')
   const [confirming, setConfirming] = useState(false)
+
+  // ── 입력값 검증 · 화면 표시값 ───────────────────────────
 
   const count = Number(countInput)
 
@@ -87,6 +86,8 @@ export function VmCreatePanel({
     && slots.free > 0
     && validCount
   )
+
+  // ── 생성 동작 ────────────────────────────────────────────
 
   function handleClose() {
     if (creating) {
@@ -139,6 +140,8 @@ export function VmCreatePanel({
     return null
   }
 
+  // ── 생성 후 예상 사용량 ──────────────────────────────────
+
   const projectedTaken = (
     slots && validCount
       ? slots.taken + count
@@ -157,8 +160,7 @@ export function VmCreatePanel({
       onClose={handleClose}
       closeDisabled={creating}
     >
-
-        {confirming && selectedImage && flavor ? (
+      {confirming && selectedImage && flavor ? (
           <>
             <p className="confirm-message">
               <strong>{count}대</strong>를 생성합니다.

@@ -4,13 +4,13 @@ import {
 } from 'react'
 
 import {
-  type VmItem,
   type VmListResponse,
   type VmReclaimRequest,
   type VmReclaimResponse,
   type VmStatus,
 } from '../api/vms'
 import { ReclaimConfirmDialog } from './ReclaimConfirmDialog'
+import { VmStatusBadge } from './VmStatusBadge'
 
 type VmListProps = {
   data: VmListResponse | null
@@ -45,49 +45,6 @@ function formatCreatedAt(value: string) {
   return `${year}-${month}-${day} ${hour}:${minute}`
 }
 
-function StatusBadge({ vm }: { vm: VmItem }) {
-  if (vm.status !== 'FAILED' || !vm.failure) {
-    return (
-      <span
-        className={
-          `badge badge-${vm.status.toLowerCase()}`
-        }
-      >
-        {vm.status}
-      </span>
-    )
-  }
-
-  return (
-    <span
-      className="badge badge-failed fail-hover"
-      tabIndex={0}
-    >
-      FAILED
-
-      <span className="failure-popover">
-        <strong>{vm.failure.label}</strong>
-
-        <span>
-          {vm.failure.description}
-        </span>
-
-        <span className="failure-cleanup">
-          cleanup:
-          {' '}
-          {vm.failure.cleanup_status ?? 'PENDING'}
-        </span>
-
-        {vm.failure.detail && (
-          <span className="failure-raw">
-            {vm.failure.detail}
-          </span>
-        )}
-      </span>
-    </span>
-  )
-}
-
 export function VmList({
   data,
   error,
@@ -102,6 +59,8 @@ export function VmList({
   onStatusFilterChange,
   onReclaim,
 }: VmListProps) {
+  // ── 선택 · 회수 상태 ──────────────────────────────────────
+
   const [selectedVmIds, setSelectedVmIds] = useState<number[]>([])
   const [reclaimConfirm, setReclaimConfirm] = useState<
     VmReclaimRequest | null
@@ -114,6 +73,8 @@ export function VmList({
   const currentSelectedIds = selectedVmIds.filter(
     (id) => reclaimableItems.some((vm) => vm.id === id),
   )
+
+  // ── 검색 · 필터 · 선택 ──────────────────────────────────
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -133,6 +94,8 @@ export function VmList({
         : [...current, vmId]
     ))
   }
+
+  // ── 회수 요청 ────────────────────────────────────────────
 
   function handleSelectedReclaim() {
     if (currentSelectedIds.length === 0 || reclaiming) {
@@ -173,6 +136,8 @@ export function VmList({
 
     setReclaimConfirm(null)
   }
+
+  // ── 조회 상태별 화면 ─────────────────────────────────────
 
   if (loading) {
     return (
@@ -401,7 +366,7 @@ export function VmList({
                   </td>
 
                   <td className="status-cell">
-                    <StatusBadge vm={vm} />
+                    <VmStatusBadge vm={vm} />
                   </td>
 
                   <td className="muted created-at">
