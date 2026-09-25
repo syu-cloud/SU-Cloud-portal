@@ -4,7 +4,7 @@ import logging
 
 from provisioning import services as prov
 from osclient import vm as osvm
-from portal.labels import FAILED_DESCRIPTIONS
+from provisioning.failures import FAILED_DESCRIPTIONS, friendly_label
 from catalog import services as catalog_service
 
 log = logging.getLogger(__name__)
@@ -163,42 +163,6 @@ def build_rows(vms):
         rows.append(row)
 
     return rows
-
-
-def friendly_label(error: str) -> str:
-    """워커가 남긴 예외 문자열을 FAILED 팝오버용 라벨로 변환"""
-    e = error.lower()
-
-    if "badrequest" in e:
-        return "잘못된 요청 (설정값 오류)"
-
-    if " 401" in e:
-        return "인증 만료"
-
-    if "forbidden" in e:
-        return "자원 한도 초과 (Quota)"
-
-    if "notfound" in e or " 404" in e:
-        if "/servers/" in e:
-            return "VM 인스턴스 소실"
-        return "리소스 없음 (image/flavor/network 설정 오류)"
-
-    if "conflict" in e or " 409" in e:
-        return "IP 충돌" if ("fip" in e or "floating" in e) else "이름/상태 충돌"
-
-    if "resourcefailure" in e:
-        return "생성 실패 (자원 부족 또는 빌드 오류)"
-
-    if "resourcetimeout" in e or "timeout" in e:
-        return "접속 확인 시간 초과" if "ssh" in e else "생성 시간 초과"
-
-    if "stopiteration" in e:
-        return "포트/FIP 조회 실패"
-
-    if "neutron" in e or "floating" in e or "port" in e:
-        return "네트워크/IP 할당 실패"
-
-    return "실패"
 
 
 # ══ 생성 화면 보조 ══════════════════════════════════════

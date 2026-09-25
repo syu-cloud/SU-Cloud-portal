@@ -1,5 +1,6 @@
-"""FAILED 라벨 → 사용자 안내 문구.
-표현 계층. 프론트/백엔드 분리 시 프론트로 이동할 후보.
+"""VM provisioning 실패 원인을 사용자 표시용 정보로 변환한다.
+
+REST API와 legacy Django Portal이 동일한 실패 해석 규칙을 공유한다.
 """
 
 FAILED_DESCRIPTIONS = {
@@ -17,3 +18,39 @@ FAILED_DESCRIPTIONS = {
     "네트워크/IP 할당 실패": "네트워크 또는 외부 IP 연결에 문제가 있었어요.",
     "실패": "원인을 특정하지 못했어요. 아래 원본 로그를 확인해주세요.",
 }
+
+
+def friendly_label(error: str) -> str:
+    """워커가 남긴 예외 문자열을 사용자 표시용 라벨로 변환한다."""
+    e = error.lower()
+
+    if "badrequest" in e:
+        return "잘못된 요청 (설정값 오류)"
+
+    if " 401" in e:
+        return "인증 만료"
+
+    if "forbidden" in e:
+        return "자원 한도 초과 (Quota)"
+
+    if "notfound" in e or " 404" in e:
+        if "/servers/" in e:
+            return "VM 인스턴스 소실"
+        return "리소스 없음 (image/flavor/network 설정 오류)"
+
+    if "conflict" in e or " 409" in e:
+        return "IP 충돌" if ("fip" in e or "floating" in e) else "이름/상태 충돌"
+
+    if "resourcefailure" in e:
+        return "생성 실패 (자원 부족 또는 빌드 오류)"
+
+    if "resourcetimeout" in e or "timeout" in e:
+        return "접속 확인 시간 초과" if "ssh" in e else "생성 시간 초과"
+
+    if "stopiteration" in e:
+        return "포트/FIP 조회 실패"
+
+    if "neutron" in e or "floating" in e or "port" in e:
+        return "네트워크/IP 할당 실패"
+
+    return "실패"

@@ -2,9 +2,8 @@
 
 from catalog import services as catalog_service
 from osclient import vm as osvm
-from portal.labels import FAILED_DESCRIPTIONS
-from portal.services import friendly_label
 from provisioning import services as prov
+from provisioning.failures import FAILED_DESCRIPTIONS, friendly_label
 from provisioning.models import Vm, VmFailure
 
 
