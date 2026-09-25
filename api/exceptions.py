@@ -1,7 +1,11 @@
 import logging
 
 from rest_framework import status
-from rest_framework.exceptions import NotAuthenticated, PermissionDenied
+from rest_framework.exceptions import (
+    NotAuthenticated,
+    ParseError,
+    PermissionDenied,
+)
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
@@ -25,6 +29,14 @@ def api_exception_handler(exc, context):
             },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
+    # JSON 문법 오류를 공통 Validation Error 형식으로 변환
+    if isinstance(exc, ParseError):
+        response.data = {
+            "code": "VALIDATION_ERROR",
+            "message": "Malformed JSON request body.",
+        }
+        return response
 
     # 보호 API의 미인증 응답을 Contract의 401 형식으로 변환
     if isinstance(exc, NotAuthenticated):

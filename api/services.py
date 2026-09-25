@@ -16,6 +16,54 @@ VALID_VM_STATUSES = (
 )
 
 
+class ImageNotAvailable(Exception):
+    pass
+
+
+class InsufficientCapacity(Exception):
+    pass
+
+
+def create_vms(count, image_id):
+    """검증된 생성 요청을 기존 provisioning 예약 계층에 접수한다."""
+    image = catalog_service.get_portal_image(image_id)
+
+    if image is None:
+        raise ImageNotAvailable
+
+    # 사전 검사 시점에 요청 수 전체를 수용할 수 없으면 0대 접수한다.
+    if count > prov.free_slot_count():
+        raise InsufficientCapacity
+
+    accepted = []
+
+    for _ in range(count):
+        vm = prov.reserve(
+            "",
+            image_id=image["id"],
+            image_name=image["name"],
+        )
+
+        # 사전 검사 이후 동시 요청으로 Slot이 소진될 수 있다.
+        if vm is None:
+            break
+
+        accepted.append({
+            "id": vm.id,
+            "slot_id": vm.slot_id,
+            "status": vm.status,
+        })
+
+    if not accepted:
+        raise InsufficientCapacity
+
+    return {
+        "requested_count": count,
+        "accepted_count": len(accepted),
+        "items": accepted,
+    }
+
+
 def list_vms(status_filter="", q=""):
     """VM 목록과 검색·필터 적용 전 전체 현황을 반환한다."""
     if status_filter and status_filter not in VALID_VM_STATUSES:

@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from django.contrib.auth import authenticate, login, logout
 from django.middleware.csrf import get_token
 
@@ -78,9 +80,12 @@ def session_view(request):
     })
 
 
-@api_view(["GET"])
+@api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def vm_list_view(request):
+    if request.method == "POST":
+        return _create_vms(request)
+
     # 검색 · 상태 Filter
     status_filter = request.query_params.get("status", "")
     q = request.query_params.get("q", "").strip()
@@ -100,6 +105,79 @@ def vm_list_view(request):
         )
 
     return Response(data)
+
+
+def _create_vms(request):
+    """VM 생성 요청의 HTTP 입력 검증 및 응답 변환."""
+    if not isinstance(request.data, dict):
+        return Response(
+            {
+                "code": "VALIDATION_ERROR",
+                "message": "Request body must be a JSON object.",
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    count = request.data.get("count")
+
+    # bool은 Python에서 int의 하위 타입이므로 명시적으로 제외한다.
+    if type(count) is not int or count < 1:
+        return Response(
+            {
+                "code": "VALIDATION_ERROR",
+                "message": "count must be an integer greater than or equal to 1.",
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    image_id = request.data.get("image_id")
+
+    if not isinstance(image_id, str) or not image_id:
+        return Response(
+            {
+                "code": "VALIDATION_ERROR",
+                "message": "image_id must be a valid UUID.",
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        UUID(image_id)
+    except ValueError:
+        return Response(
+            {
+                "code": "VALIDATION_ERROR",
+                "message": "image_id must be a valid UUID.",
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        data = api_services.create_vms(
+            count=count,
+            image_id=image_id,
+        )
+    except api_services.ImageNotAvailable:
+        return Response(
+            {
+                "code": "IMAGE_NOT_AVAILABLE",
+                "message": "The selected image is not available.",
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
+    except api_services.InsufficientCapacity:
+        return Response(
+            {
+                "code": "INSUFFICIENT_CAPACITY",
+                "message": "There are not enough free slots.",
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    return Response(
+        data,
+        status=status.HTTP_202_ACCEPTED,
+    )
 
 
 @api_view(["GET"])

@@ -1,4 +1,6 @@
 import base64
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -278,4 +280,357 @@ class VmListApiTests(APITestCase):
         self.assertEqual(
             response.json()["summary"]["visible_total"],
             5,
+        )
+
+
+class VmCreateApiTests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = "/api/v1/vms"
+
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username="vmcreatetester",
+            password="test-password",
+        )
+
+        self.image_id = "11111111-1111-1111-1111-111111111111"
+        self.image = {
+            "id": self.image_id,
+            "name": "ubuntu-24.04",
+        }
+
+    def _login(self):
+        self.client.force_login(self.user)
+
+    @patch("api.views.api_services.create_vms")
+    def test_create_vms_requires_csrf(self, mock_create_vms):
+        csrf_client = APIClient(enforce_csrf_checks=True)
+        csrf_client.force_login(self.user)
+
+        response = csrf_client.post(
+            self.url,
+            {
+                "count": 1,
+                "image_id": self.image_id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.json(),
+            {
+                "code": "CSRF_FAILED",
+                "message": "CSRF validation failed.",
+            },
+        )
+
+        mock_create_vms.assert_not_called()
+
+    def test_create_vms_requires_authentication(self):
+        response = self.client.post(
+            self.url,
+            {
+                "count": 1,
+                "image_id": self.image_id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(
+            response.json()["code"],
+            "AUTHENTICATION_REQUIRED",
+        )
+
+    def test_create_vms_rejects_malformed_json(self):
+        self._login()
+
+        response = self.client.generic(
+            "POST",
+            self.url,
+            '{"count": 1, "image_id":',
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["code"],
+            "VALIDATION_ERROR",
+        )
+
+    def test_create_vms_rejects_non_object_body(self):
+        self._login()
+
+        response = self.client.post(
+            self.url,
+            [],
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["code"],
+            "VALIDATION_ERROR",
+        )
+
+    @patch("api.services.catalog_service.get_portal_image")
+    def test_create_vms_rejects_invalid_count(
+        self,
+        mock_get_image,
+    ):
+        self._login()
+
+        invalid_values = (
+            None,
+            0,
+            -1,
+            "1",
+            True,
+            1.5,
+        )
+
+        for count in invalid_values:
+            with self.subTest(count=count):
+                payload = {
+                    "image_id": self.image_id,
+                }
+
+                if count is not None:
+                    payload["count"] = count
+
+                response = self.client.post(
+                    self.url,
+                    payload,
+                    format="json",
+                )
+
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(
+                    response.json()["code"],
+                    "VALIDATION_ERROR",
+                )
+
+        mock_get_image.assert_not_called()
+
+    @patch("api.services.catalog_service.get_portal_image")
+    def test_create_vms_rejects_invalid_image_id(
+        self,
+        mock_get_image,
+    ):
+        self._login()
+
+        for image_id in (None, "", "not-a-uuid"):
+            with self.subTest(image_id=image_id):
+                payload = {
+                    "count": 1,
+                }
+
+                if image_id is not None:
+                    payload["image_id"] = image_id
+
+                response = self.client.post(
+                    self.url,
+                    payload,
+                    format="json",
+                )
+
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(
+                    response.json()["code"],
+                    "VALIDATION_ERROR",
+                )
+
+        mock_get_image.assert_not_called()
+
+    @patch("api.services.prov.reserve")
+    @patch("api.services.catalog_service.get_portal_image")
+    def test_create_vms_rejects_unavailable_image(
+        self,
+        mock_get_image,
+        mock_reserve,
+    ):
+        self._login()
+        mock_get_image.return_value = None
+
+        response = self.client.post(
+            self.url,
+            {
+                "count": 1,
+                "image_id": self.image_id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["code"],
+            "IMAGE_NOT_AVAILABLE",
+        )
+        mock_reserve.assert_not_called()
+
+    @patch("api.services.prov.reserve")
+    @patch("api.services.prov.free_slot_count")
+    @patch("api.services.catalog_service.get_portal_image")
+    def test_create_vms_rejects_request_over_capacity(
+        self,
+        mock_get_image,
+        mock_free_slot_count,
+        mock_reserve,
+    ):
+        self._login()
+
+        mock_get_image.return_value = self.image
+        mock_free_slot_count.return_value = 2
+
+        response = self.client.post(
+            self.url,
+            {
+                "count": 3,
+                "image_id": self.image_id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["code"],
+            "INSUFFICIENT_CAPACITY",
+        )
+        mock_reserve.assert_not_called()
+
+    @patch("api.services.prov.reserve")
+    @patch("api.services.prov.free_slot_count")
+    @patch("api.services.catalog_service.get_portal_image")
+    def test_create_vms_returns_202_with_accepted_items(
+        self,
+        mock_get_image,
+        mock_free_slot_count,
+        mock_reserve,
+    ):
+        self._login()
+
+        mock_get_image.return_value = self.image
+        mock_free_slot_count.return_value = 5
+        mock_reserve.side_effect = [
+            SimpleNamespace(
+                id=101,
+                slot_id=1,
+                status=Vm.PROVISIONING,
+            ),
+            SimpleNamespace(
+                id=102,
+                slot_id=2,
+                status=Vm.PROVISIONING,
+            ),
+        ]
+
+        response = self.client.post(
+            self.url,
+            {
+                "count": 2,
+                "image_id": self.image_id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(
+            response.json(),
+            {
+                "requested_count": 2,
+                "accepted_count": 2,
+                "items": [
+                    {
+                        "id": 101,
+                        "slot_id": 1,
+                        "status": "PROVISIONING",
+                    },
+                    {
+                        "id": 102,
+                        "slot_id": 2,
+                        "status": "PROVISIONING",
+                    },
+                ],
+            },
+        )
+
+        self.assertEqual(mock_reserve.call_count, 2)
+
+    @patch("api.services.prov.reserve")
+    @patch("api.services.prov.free_slot_count")
+    @patch("api.services.catalog_service.get_portal_image")
+    def test_create_vms_allows_partial_acceptance_after_precheck(
+        self,
+        mock_get_image,
+        mock_free_slot_count,
+        mock_reserve,
+    ):
+        self._login()
+
+        mock_get_image.return_value = self.image
+        mock_free_slot_count.return_value = 5
+        mock_reserve.side_effect = [
+            SimpleNamespace(
+                id=101,
+                slot_id=1,
+                status=Vm.PROVISIONING,
+            ),
+            SimpleNamespace(
+                id=102,
+                slot_id=2,
+                status=Vm.PROVISIONING,
+            ),
+            None,
+        ]
+
+        response = self.client.post(
+            self.url,
+            {
+                "count": 3,
+                "image_id": self.image_id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 202)
+
+        data = response.json()
+
+        self.assertEqual(data["requested_count"], 3)
+        self.assertEqual(data["accepted_count"], 2)
+        self.assertEqual(
+            [item["id"] for item in data["items"]],
+            [101, 102],
+        )
+
+    @patch("api.services.prov.reserve")
+    @patch("api.services.prov.free_slot_count")
+    @patch("api.services.catalog_service.get_portal_image")
+    def test_create_vms_returns_409_when_nothing_is_accepted(
+        self,
+        mock_get_image,
+        mock_free_slot_count,
+        mock_reserve,
+    ):
+        self._login()
+
+        mock_get_image.return_value = self.image
+        mock_free_slot_count.return_value = 5
+        mock_reserve.return_value = None
+
+        response = self.client.post(
+            self.url,
+            {
+                "count": 2,
+                "image_id": self.image_id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["code"],
+            "INSUFFICIENT_CAPACITY",
         )
