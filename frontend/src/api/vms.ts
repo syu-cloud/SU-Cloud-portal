@@ -1,3 +1,5 @@
+import { apiRequest } from './client'
+
 export type VmStatus =
   | 'ACTIVE'
   | 'PROVISIONING'
@@ -37,37 +39,6 @@ export type VmListResponse = {
   }
 }
 
-type ErrorResponse = {
-  code?: string
-  message?: string
-}
-
-async function getErrorMessage(response: Response): Promise<string> {
-  try {
-    const data = (await response.json()) as ErrorResponse
-
-    if (data.message) {
-      return data.message
-    }
-  } catch {
-    // JSON 형식이 아닌 오류 응답은 아래 기본 문구를 사용한다.
-  }
-
-  return `Request failed (${response.status})`
-}
-
-export async function getVms(): Promise<VmListResponse> {
-  const response = await fetch('/api/v1/vms', {
-    method: 'GET',
-    headers: {
-      Accept: 'application/json',
-    },
-    credentials: 'same-origin',
-  })
-
-  if (!response.ok) {
-    throw new Error(await getErrorMessage(response))
-  }
-
-  return response.json()
+export function getVms(): Promise<VmListResponse> {
+  return apiRequest<VmListResponse>('/api/v1/vms')
 }
