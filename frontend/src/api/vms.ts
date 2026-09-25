@@ -93,3 +93,39 @@ export function createVms(
     },
   )
 }
+
+export type VmReclaimRequest =
+  | {
+      scope: 'selected'
+      vm_ids: number[]
+    }
+  | {
+      scope: 'all'
+    }
+
+export type VmReclaimResult = {
+  vm_id: number
+  accepted: boolean
+  code?: 'VM_NOT_FOUND' | 'VM_NOT_RECLAIMABLE'
+}
+
+export type VmReclaimResponse = {
+  summary: {
+    requested: number
+    accepted: number
+    rejected: number
+  }
+  results: VmReclaimResult[]
+}
+
+export function reclaimVms(
+  request: VmReclaimRequest,
+): Promise<VmReclaimResponse> {
+  return apiRequest<VmReclaimResponse>(
+    '/api/v1/vms/reclaim-requests',
+    {
+      method: 'POST',
+      body: request,
+    },
+  )
+}

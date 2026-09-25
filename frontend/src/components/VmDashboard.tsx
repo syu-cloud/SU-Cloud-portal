@@ -10,8 +10,11 @@ import { ApiError } from '../api/client'
 import {
   createVms,
   getVms,
+  reclaimVms,
   type VmCreateResponse,
   type VmListResponse,
+  type VmReclaimRequest,
+  type VmReclaimResponse,
   type VmStatus,
 } from '../api/vms'
 import { VmCreatePanel } from './VmCreatePanel'
@@ -37,6 +40,10 @@ export function VmDashboard({
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [createResult, setCreateResult] = useState<VmCreateResponse | null>(null)
+
+  const [reclaiming, setReclaiming] = useState(false)
+  const [reclaimError, setReclaimError] = useState<string | null>(null)
+  const [reclaimResult, setReclaimResult] = useState<VmReclaimResponse | null>(null)
 
   const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
@@ -183,6 +190,36 @@ export function VmDashboard({
     }
   }
 
+  async function handleReclaim(
+    request: VmReclaimRequest,
+  ) {
+    setReclaiming(true)
+    setReclaimError(null)
+    setReclaimResult(null)
+
+    try {
+      const result = await reclaimVms(request)
+
+      setReclaimResult(result)
+      return true
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 401) {
+        onUnauthorized()
+        return false
+      }
+
+      setReclaimError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to reclaim VMs.',
+      )
+
+      return false
+    } finally {
+      setReclaiming(false)
+    }
+  }
+
   return (
     <>
       <VmCreatePanel
@@ -208,6 +245,10 @@ export function VmDashboard({
         onSearchInputChange={setSearchInput}
         onSearch={handleSearch}
         onStatusFilterChange={setStatusFilter}
+        reclaiming={reclaiming}
+        reclaimError={reclaimError}
+        reclaimResult={reclaimResult}
+        onReclaim={handleReclaim}
       />
     </>
   )
