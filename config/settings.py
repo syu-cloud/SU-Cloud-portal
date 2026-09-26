@@ -25,7 +25,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     "rest_framework",
     "api",
-    "portal",
     "provisioning",
 ]
 
@@ -91,7 +90,6 @@ CSRF_COOKIE_NAME = "suportal_csrftoken"
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-LOGIN_REDIRECT_URL = "portal:list"
 
 REST_FRAMEWORK = {
     # Phase 1 API 인증은 Django Session만 사용한다.
